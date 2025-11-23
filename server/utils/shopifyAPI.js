@@ -484,6 +484,17 @@ export class ShopifyAPI {
 
     for (const product of products) {
       try {
+        // Skip products without configuration
+        if (!product.configuration?.configured) {
+          updates.push({
+            productId: product.id,
+            productTitle: product.title,
+            success: false,
+            error: 'Product not configured'
+          });
+          continue;
+        }
+
         // Calculate new price
         const priceBreakdown = calculator.calculatePrice({
           metalWeight: product.configuration.metal_weight,
@@ -497,12 +508,13 @@ export class ShopifyAPI {
           taxPercent: product.configuration.tax_percent
         });
 
-        // Update product with new variant price using productUpdate
+        // Update variant price using productVariantsBulkUpdate
         const mutation = `
-          mutation UpdateProduct($input: ProductInput!) {
-            productUpdate(input: $input) {
-              product {
+          mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+              productVariants {
                 id
+                price
               }
               userErrors {
                 field
@@ -513,17 +525,15 @@ export class ShopifyAPI {
         `;
 
         const result = await this.graphql(mutation, {
-          input: {
-            id: product.id,
-            variants: [{
-              id: product.variantId,
-              price: priceBreakdown.finalPrice.toString()
-            }]
-          }
+          productId: product.id,
+          variants: [{
+            id: product.variantId,
+            price: priceBreakdown.finalPrice.toString()
+          }]
         });
 
-        if (result.productUpdate?.userErrors?.length > 0) {
-          throw new Error(JSON.stringify(result.productUpdate.userErrors));
+        if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
+          throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
         }
 
         updates.push({

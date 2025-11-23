@@ -359,7 +359,7 @@
       // API Base URL - automatically detects localhost vs deployed
       const API_BASE =
         window.location.hostname === "localhost"
-          ? "http://localhost:3000/api"
+          ? "http://localhost:3010/api"
           : `${window.location.protocol}//${window.location.host}/api`;
 
       console.log("API Base URL:", API_BASE);
@@ -581,9 +581,8 @@
 
               {showSuccess && (
                 <div className="success-message">
-                  ✓ The product prices were last updated on{" "}
-                  {new Date().toLocaleString()}. All products were updated
-                  successfully.
+                  ✓ Metal prices saved successfully! Click "Refresh Prices" to
+                  update all products.
                 </div>
               )}
 
@@ -680,6 +679,13 @@
                   gap: "12px",
                 }}
               >
+                <button
+                  className="btn btn-secondary"
+                  onClick={handleUpdateMetalPrices}
+                  disabled={loading}
+                >
+                  💾 Save Metal Prices
+                </button>
                 <button
                   className="btn btn-primary btn-icon"
                   onClick={handleRefreshPrices}
