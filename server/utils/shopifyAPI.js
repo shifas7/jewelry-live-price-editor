@@ -343,6 +343,20 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: "jewelry_config",
+        key: "stone_type",
+        value: config.stoneType || "",
+        type: "single_line_text_field",
+      },
+      {
+        ownerId: productId,
+        namespace: "jewelry_config",
+        key: "stone_weight",
+        value: (config.stoneWeight || "0").toString(),
+        type: "number_decimal",
+      },
+      {
+        ownerId: productId,
+        namespace: "jewelry_config",
         key: "stone_cost",
         value: (config.stoneCost || "0").toString(),
         type: "number_decimal",
@@ -406,6 +420,7 @@ export class ShopifyAPI {
           "making_charge_percent",
           "labour_value",
           "wastage_value",
+          "stone_weight",
           "stone_cost",
           "tax_percent",
         ].includes(field.key)
@@ -465,6 +480,7 @@ export class ShopifyAPI {
             "making_charge_percent",
             "labour_value",
             "wastage_value",
+            "stone_weight",
             "stone_cost",
             "tax_percent",
           ].includes(field.key)
@@ -624,4 +640,4 @@ export class ShopifyAPI {
   }
 }
 
-export default ShopifyAPI;
+export default ShopifyAPI;  
