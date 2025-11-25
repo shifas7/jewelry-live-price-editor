@@ -364,6 +364,20 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: "jewelry_config",
+        key: "net_weight",
+        value: (config.netWeight || "0").toString(),
+        type: "number_decimal",
+      },
+      {
+        ownerId: productId,
+        namespace: "jewelry_config",
+        key: "gross_weight",
+        value: (config.grossWeight || "0").toString(),
+        type: "number_decimal",
+      },
+      {
+        ownerId: productId,
+        namespace: "jewelry_config",
         key: "tax_percent",
         value: (config.taxPercent || "0").toString(),
         type: "number_decimal",
@@ -422,6 +436,8 @@ export class ShopifyAPI {
           "wastage_value",
           "stone_weight",
           "stone_cost",
+          "net_weight",
+          "gross_weight",
           "tax_percent",
         ].includes(field.key)
       ) {
@@ -482,6 +498,8 @@ export class ShopifyAPI {
             "wastage_value",
             "stone_weight",
             "stone_cost",
+            "net_weight",
+            "gross_weight",
             "tax_percent",
           ].includes(field.key)
         ) {
@@ -640,4 +658,4 @@ export class ShopifyAPI {
   }
 }
 
-export default ShopifyAPI;  
+export default ShopifyAPI;
