@@ -813,7 +813,7 @@
                 labourValue: product.configuration?.labour_value || '',
                 wastageType: product.configuration?.wastage_type || 'percentage',
                 wastageValue: product.configuration?.wastage_value || '',
-                stoneType: product.configuration?.stone_type || '',
+                stoneType: (product.configuration?.stone_type && product.configuration?.stone_type !== 'none') ? product.configuration?.stone_type : '',
                 stoneWeight: product.configuration?.stone_weight || '',
                 stoneCost: product.configuration?.stone_cost || '',
                 netWeight: product.configuration?.net_weight || '',
@@ -919,10 +919,34 @@
 
             const handleSave = async () => {
                 try {
+                    // Validate required fields
+                    if (!config.metalWeight || config.metalWeight === '') {
+                        alert('Metal Weight is required');
+                        return;
+                    }
+
+                    if (!config.metalType || config.metalType === '') {
+                        alert('Metal Type is required');
+                        return;
+                    }
+
+                    // Normalize empty values to 0 for numeric fields before sending
+                    const configToSend = {
+                        ...config,
+                        makingChargePercent: config.makingChargePercent === '' ? '0' : config.makingChargePercent,
+                        labourValue: config.labourValue === '' ? '0' : config.labourValue,
+                        wastageValue: config.wastageValue === '' ? '0' : config.wastageValue,
+                        stoneWeight: config.stoneWeight === '' ? '0' : config.stoneWeight,
+                        stoneCost: config.stoneCost === '' ? '0' : config.stoneCost,
+                        netWeight: config.netWeight === '' ? '0' : config.netWeight,
+                        grossWeight: config.grossWeight === '' ? '0' : config.grossWeight,
+                        taxPercent: config.taxPercent === '' ? '3' : config.taxPercent
+                    };
+
                     const response = await fetch(`${API_BASE}/products/${product.id}/configure`, {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(config)
+                        body: JSON.stringify(configToSend)
                     });
                     
                     const data = await response.json();
@@ -930,10 +954,26 @@
                         alert('Product configured successfully!');
                         onSave();
                         onClose();
+                    } else {
+                        // Parse and display error message
+                        let errorMessage = 'Error saving configuration';
+                        if (data.error) {
+                            try {
+                                const errors = JSON.parse(data.error);
+                                if (Array.isArray(errors) && errors.length > 0) {
+                                    errorMessage = errors.map(e => e.message || e).join('\n');
+                                } else {
+                                    errorMessage = data.error;
+                                }
+                            } catch {
+                                errorMessage = data.error;
+                            }
+                        }
+                        alert(errorMessage);
                     }
                 } catch (error) {
                     console.error('Error saving configuration:', error);
-                    alert('Error saving configuration');
+                    alert('Error saving configuration: ' + error.message);
                 }
             };
 
@@ -977,19 +1017,20 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Making Charge</label>
+                                    <label>Making Charge (Optional)</label>
                                     <div className="input-suffix" data-suffix="%">
                                         <input
                                             type="number"
                                             step="0.1"
                                             value={config.makingChargePercent}
                                             onChange={(e) => setConfig({...config, makingChargePercent: e.target.value})}
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Labour Type</label>
+                                    <label>Labour Type (Optional)</label>
                                     <select
                                         value={config.labourType}
                                         onChange={(e) => setConfig({...config, labourType: e.target.value})}
@@ -1000,19 +1041,20 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Labour Value</label>
+                                    <label>Labour Value (Optional)</label>
                                     <div className="input-suffix" data-suffix={config.labourType === 'percentage' ? '%' : 'INR'}>
                                         <input
                                             type="number"
                                             step="0.1"
                                             value={config.labourValue}
                                             onChange={(e) => setConfig({...config, labourValue: e.target.value})}
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Wastage Type</label>
+                                    <label>Wastage Type (Optional)</label>
                                     <select
                                         value={config.wastageType}
                                         onChange={(e) => setConfig({...config, wastageType: e.target.value})}
@@ -1024,7 +1066,7 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Wastage Value</label>
+                                    <label>Wastage Value (Optional)</label>
                                     <div className="input-suffix" data-suffix={
                                         config.wastageType === 'percentage' ? '%' : 
                                         config.wastageType === 'weight' ? 'g' : 'INR'
@@ -1034,38 +1076,39 @@
                                             step="0.1"
                                             value={config.wastageValue}
                                             onChange={(e) => setConfig({...config, wastageValue: e.target.value})}
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Net Weight</label>
+                                    <label>Net Weight (Optional)</label>
                                     <div className="input-suffix" data-suffix="g">
                                         <input
                                             type="number"
                                             step="0.01"
                                             value={config.netWeight}
                                             onChange={(e) => setConfig({...config, netWeight: e.target.value})}
-                                            placeholder="Display only"
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Gross Weight</label>
+                                    <label>Gross Weight (Optional)</label>
                                     <div className="input-suffix" data-suffix="g">
                                         <input
                                             type="number"
                                             step="0.01"
                                             value={config.grossWeight}
                                             onChange={(e) => setConfig({...config, grossWeight: e.target.value})}
-                                            placeholder="Display only"
+                                            placeholder="0"
                                         />
                                     </div>
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Stone Type</label>
+                                    <label>Stone Type (Optional)</label>
                                     <select
                                         value={config.stoneType}
                                         onChange={(e) => {
@@ -1083,13 +1126,14 @@
 
                                 {config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' && (
                                     <div className="form-group">
-                                        <label>Diamond Weight</label>
+                                        <label>Diamond Weight (Optional)</label>
                                         <div className="input-suffix" data-suffix="Carat">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={config.stoneWeight}
                                                 onChange={(e) => setConfig({...config, stoneWeight: e.target.value})}
+                                                placeholder="0"
                                             />
                                         </div>
                                     </div>
@@ -1097,21 +1141,21 @@
 
                                 {config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() !== 'diamond' && (
                                     <div className="form-group">
-                                        <label>Stone Weight</label>
+                                        <label>Stone Weight (Optional)</label>
                                         <div className="input-suffix" data-suffix="Carat">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={config.stoneWeight}
                                                 onChange={(e) => setConfig({...config, stoneWeight: e.target.value})}
-                                                placeholder="Display only"
+                                                placeholder="0"
                                             />
                                         </div>
                                     </div>
                                 )}
 
                                 <div className="form-group">
-                                    <label>Stone Cost</label>
+                                    <label>Stone Cost (Optional)</label>
                                     <div className="input-suffix" data-suffix="INR">
                                         <input
                                             type="number"
@@ -1119,7 +1163,7 @@
                                             value={config.stoneCost}
                                             onChange={(e) => setConfig({...config, stoneCost: e.target.value})}
                                             disabled={config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond'}
-                                            placeholder={config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' ? 'Auto-calculated' : 'Enter cost'}
+                                            placeholder={config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' ? 'Auto-calculated' : '0'}
                                         />
                                     </div>
                                     {config.stoneType && config.stoneWeight && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' && (() => {
@@ -1140,13 +1184,14 @@
                                 </div>
 
                                 <div className="form-group">
-                                    <label>Tax</label>
+                                    <label>Tax (Optional, Default: 3%)</label>
                                     <div className="input-suffix" data-suffix="%">
                                         <input
                                             type="number"
                                             step="0.1"
                                             value={config.taxPercent}
                                             onChange={(e) => setConfig({...config, taxPercent: e.target.value})}
+                                            placeholder="3"
                                         />
                                     </div>
                                 </div>

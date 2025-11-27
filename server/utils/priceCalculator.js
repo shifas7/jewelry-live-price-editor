@@ -76,6 +76,7 @@ export class PriceCalculator {
     const finalPrice = subtotal + taxAmount;
 
     return {
+      metalRate: metalRate,
       metalCost: this.roundPrice(metalCost),
       makingCharge: this.roundPrice(makingCharge),
       labourCharge: this.roundPrice(labourCharge),

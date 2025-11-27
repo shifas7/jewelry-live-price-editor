@@ -1,8 +1,8 @@
-import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import { PriceCalculator, StoneCalculator } from "./utils/priceCalculator.js";
-import ShopifyAPI from "./utils/shopifyAPI.js";
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { PriceCalculator, StoneCalculator } from './utils/priceCalculator.js';
+import ShopifyAPI from './utils/shopifyAPI.js';
 
 dotenv.config();
 
@@ -14,7 +14,7 @@ app.use(cors());
 app.use(express.json());
 
 // Serve static files from public directory
-app.use(express.static("public"));
+app.use(express.static('public'));
 
 // Initialize Shopify API
 const shopifyAPI = new ShopifyAPI(
@@ -32,7 +32,7 @@ async function initializeCalculators() {
     const metalRates = await shopifyAPI.getMetalPrices();
     if (metalRates) {
       priceCalculator = new PriceCalculator(metalRates);
-      console.log("✅ Price calculator initialized with current metal rates");
+      console.log('✅ Price calculator initialized with current metal rates');
     } else {
       // Default rates if not set
       priceCalculator = new PriceCalculator({
@@ -41,17 +41,17 @@ async function initializeCalculators() {
         gold18kt: 5500,
         gold14kt: 4500,
         platinum: 3000,
-        silver: 80,
+        silver: 80
       });
-      console.log("⚠️  Price calculator initialized with default rates");
+      console.log('⚠️  Price calculator initialized with default rates');
     }
 
     // Initialize stone calculator
     const stonePrices = await shopifyAPI.getAllStonePricing();
     stoneCalculator = new StoneCalculator(stonePrices);
-    console.log("✅ Stone calculator initialized");
+    console.log('✅ Stone calculator initialized');
   } catch (error) {
-    console.error("❌ Error initializing calculators:", error);
+    console.error('❌ Error initializing calculators:', error);
   }
 }
 
@@ -61,17 +61,17 @@ async function initializeCalculators() {
  * GET /api/metal-prices
  * Get current metal prices
  */
-app.get("/api/metal-prices", async (req, res) => {
+app.get('/api/metal-prices', async (req, res) => {
   try {
     const prices = await shopifyAPI.getMetalPrices();
     res.json({
       success: true,
-      data: prices || priceCalculator.getMetalRates(),
+      data: prices || priceCalculator.getMetalRates()
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -80,23 +80,15 @@ app.get("/api/metal-prices", async (req, res) => {
  * POST /api/metal-prices
  * Update metal prices
  */
-app.post("/api/metal-prices", async (req, res) => {
+app.post('/api/metal-prices', async (req, res) => {
   try {
-    const { gold24kt, gold22kt, gold18kt, gold14kt, platinum, silver } =
-      req.body;
+    const { gold24kt, gold22kt, gold18kt, gold14kt, platinum, silver } = req.body;
 
     // Validate input
-    if (
-      !gold24kt ||
-      !gold22kt ||
-      !gold18kt ||
-      !gold14kt ||
-      !platinum ||
-      !silver
-    ) {
+    if (!gold24kt || !gold22kt || !gold18kt || !gold14kt || !platinum || !silver) {
       return res.status(400).json({
         success: false,
-        error: "All metal prices are required",
+        error: 'All metal prices are required'
       });
     }
 
@@ -107,7 +99,7 @@ app.post("/api/metal-prices", async (req, res) => {
       gold18kt: parseFloat(gold18kt),
       gold14kt: parseFloat(gold14kt),
       platinum: parseFloat(platinum),
-      silver: parseFloat(silver),
+      silver: parseFloat(silver)
     });
 
     // Update calculator
@@ -117,18 +109,18 @@ app.post("/api/metal-prices", async (req, res) => {
       gold18kt: parseFloat(gold18kt),
       gold14kt: parseFloat(gold14kt),
       platinum: parseFloat(platinum),
-      silver: parseFloat(silver),
+      silver: parseFloat(silver)
     });
 
     res.json({
       success: true,
-      message: "Metal prices updated successfully",
-      data: result,
+      message: 'Metal prices updated successfully',
+      data: result
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -137,16 +129,13 @@ app.post("/api/metal-prices", async (req, res) => {
  * POST /api/refresh-prices
  * Bulk update all product prices based on current metal rates
  */
-app.post("/api/refresh-prices", async (req, res) => {
+app.post('/api/refresh-prices', async (req, res) => {
   try {
     const currentRates = priceCalculator.getMetalRates();
-    const updates = await shopifyAPI.bulkUpdatePrices(
-      currentRates,
-      priceCalculator
-    );
+    const updates = await shopifyAPI.bulkUpdatePrices(currentRates, priceCalculator);
 
-    const successCount = updates.filter((u) => u.success).length;
-    const failCount = updates.filter((u) => !u.success).length;
+    const successCount = updates.filter(u => u.success).length;
+    const failCount = updates.filter(u => !u.success).length;
 
     res.json({
       success: true,
@@ -155,13 +144,13 @@ app.post("/api/refresh-prices", async (req, res) => {
         totalProducts: updates.length,
         successCount,
         failCount,
-        updates,
-      },
+        updates
+      }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -172,17 +161,17 @@ app.post("/api/refresh-prices", async (req, res) => {
  * GET /api/stone-prices
  * Get all stone pricing configurations
  */
-app.get("/api/stone-prices", async (req, res) => {
+app.get('/api/stone-prices', async (req, res) => {
   try {
     const stones = await shopifyAPI.getAllStonePricing();
     res.json({
       success: true,
-      data: stones,
+      data: stones
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -191,7 +180,7 @@ app.get("/api/stone-prices", async (req, res) => {
  * POST /api/stone-prices
  * Create or update stone pricing
  */
-app.post("/api/stone-prices", async (req, res) => {
+app.post('/api/stone-prices', async (req, res) => {
   try {
     const stoneData = req.body;
 
@@ -199,12 +188,12 @@ app.post("/api/stone-prices", async (req, res) => {
     if (!stoneData.stoneId || !stoneData.stoneType) {
       return res.status(400).json({
         success: false,
-        error: "Stone ID and type are required",
+        error: 'Stone ID and type are required'
       });
     }
 
     let result;
-
+    
     // If stone has an id (from Shopify metaobject), update it
     // Otherwise create new
     if (stoneData.id) {
@@ -215,15 +204,13 @@ app.post("/api/stone-prices", async (req, res) => {
 
     res.json({
       success: true,
-      message: stoneData.id
-        ? "Stone pricing updated successfully"
-        : "Stone pricing created successfully",
-      data: result,
+      message: stoneData.id ? 'Stone pricing updated successfully' : 'Stone pricing created successfully',
+      data: result
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -232,7 +219,7 @@ app.post("/api/stone-prices", async (req, res) => {
  * DELETE /api/stone-prices/:id
  * Delete stone pricing
  */
-app.delete("/api/stone-prices/:id", async (req, res) => {
+app.delete('/api/stone-prices/:id(*)', async (req, res) => {
   try {
     const stoneId = req.params.id;
 
@@ -250,15 +237,19 @@ app.delete("/api/stone-prices/:id", async (req, res) => {
 
     const result = await shopifyAPI.graphql(mutation, { id: stoneId });
 
+    if (result.metaobjectDelete?.userErrors?.length > 0) {
+      throw new Error(JSON.stringify(result.metaobjectDelete.userErrors));
+    }
+
     res.json({
       success: true,
-      message: "Stone pricing deleted successfully",
-      data: result,
+      message: 'Stone pricing deleted successfully',
+      data: result
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -269,17 +260,17 @@ app.delete("/api/stone-prices/:id", async (req, res) => {
  * GET /api/products
  * Get all configured products
  */
-app.get("/api/products", async (req, res) => {
+app.get('/api/products', async (req, res) => {
   try {
     const products = await shopifyAPI.getConfiguredProducts();
     res.json({
       success: true,
-      data: products,
+      data: products
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -288,19 +279,19 @@ app.get("/api/products", async (req, res) => {
  * GET /api/products/:id
  * Get specific product configuration
  */
-app.get("/api/products/:id(*)", async (req, res) => {
+app.get('/api/products/:id(*)', async (req, res) => {
   try {
     const productId = req.params.id;
     const config = await shopifyAPI.getProductConfiguration(productId);
-
+    
     res.json({
       success: true,
-      data: config,
+      data: config
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -309,69 +300,105 @@ app.get("/api/products/:id(*)", async (req, res) => {
  * POST /api/products/:id/configure
  * Configure product pricing parameters
  */
-app.post("/api/products/:id(*)/configure", async (req, res) => {
+app.post('/api/products/:id(*)/configure', async (req, res) => {
   try {
     const productId = req.params.id;
     const config = req.body;
 
-    // Validate configuration
-    const requiredFields = [
-      "metalWeight",
-      "metalType",
-      "makingChargePercent",
-      "labourType",
-      "labourValue",
-      "wastageType",
-      "wastageValue",
-      "stoneCost",
-      "taxPercent",
-    ];
+    // Helper function to normalize numeric values (empty string, null, undefined -> 0)
+    const normalizeNumeric = (value) => {
+      if (value === null || value === undefined || value === '' || isNaN(value)) {
+        return 0;
+      }
+      return parseFloat(value) || 0;
+    };
 
-    const missingFields = requiredFields.filter(
-      (field) => config[field] === undefined
-    );
-    if (missingFields.length > 0) {
+    // Only metalWeight and metalType are truly required
+    if (!config.metalWeight || config.metalWeight === '') {
       return res.status(400).json({
         success: false,
-        error: `Missing required fields: ${missingFields.join(", ")}`,
+        error: 'Metal weight is required'
       });
     }
 
-    // Calculate price with current rates
-    const priceBreakdown = priceCalculator.calculatePrice(config);
+    if (!config.metalType || config.metalType === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'Metal type is required'
+      });
+    }
 
-    console.log("Saving configuration for product:", productId);
-    console.log("Configuration:", config);
+    // Normalize all numeric fields to default to 0 if empty
+    const normalizedConfig = {
+      metalWeight: normalizeNumeric(config.metalWeight),
+      metalType: config.metalType || 'gold22kt',
+      makingChargePercent: normalizeNumeric(config.makingChargePercent),
+      labourType: config.labourType || 'percentage',
+      labourValue: normalizeNumeric(config.labourValue),
+      wastageType: config.wastageType || 'percentage',
+      wastageValue: normalizeNumeric(config.wastageValue),
+      stoneType: config.stoneType || 'none',
+      stoneWeight: normalizeNumeric(config.stoneWeight),
+      stoneCost: normalizeNumeric(config.stoneCost),
+      netWeight: normalizeNumeric(config.netWeight),
+      grossWeight: normalizeNumeric(config.grossWeight),
+      taxPercent: normalizeNumeric(config.taxPercent) || 3 // Default tax to 3% if not provided
+    };
+
+    // Calculate price with current rates
+    const priceBreakdown = priceCalculator.calculatePrice(normalizedConfig);
+
+    console.log('Saving configuration for product:', productId);
+    console.log('Configuration:', normalizedConfig);
+    console.log('Price breakdown:', priceBreakdown);
+
+    // Add calculated values to config for metafields
+    const configWithCalculations = {
+      ...normalizedConfig,
+      metalRate: priceBreakdown.metalRate || 0,
+      metalCost: priceBreakdown.metalCost || 0,
+      makingCharge: priceBreakdown.makingCharge || 0,
+      labourCharge: priceBreakdown.labourCharge || 0,
+      wastageCharge: priceBreakdown.wastageCharge || 0,
+      taxAmount: priceBreakdown.taxAmount || 0,
+      productCode: config.productCode || productId.split('/').pop() // Use product ID as code if not provided
+    };
 
     // Update metafields
-    const result = await shopifyAPI.updateProductConfiguration(
-      productId,
-      config
-    );
-
-    console.log(
-      "Metafields saved successfully:",
-      result.metafields?.length || 0,
-      "fields"
-    );
+    const result = await shopifyAPI.updateProductConfiguration(productId, configWithCalculations);
+    
+    console.log('Metafields saved successfully:', result.metafields?.length || 0, 'fields');
 
     // Note: Price will be updated when "Refresh Prices" is clicked
     // This avoids complexity with variant price updates
 
     res.json({
       success: true,
-      message:
-        'Product configured successfully. Click "Refresh Prices" in Dashboard to update product price in store.',
+      message: 'Product configured successfully. Click "Refresh Prices" in Dashboard to update product price in store.',
       data: {
-        configuration: config,
-        priceBreakdown,
-      },
+        configuration: normalizedConfig,
+        priceBreakdown
+      }
     });
   } catch (error) {
-    console.error("Error configuring product:", req.params.id, error);
+    console.error('Error configuring product:', req.params.id, error);
+    
+    // Parse error message if it's a JSON string
+    let errorMessage = error.message || 'Unknown error occurred';
+    try {
+      const parsed = JSON.parse(errorMessage);
+      if (Array.isArray(parsed) && parsed.length > 0) {
+        errorMessage = parsed.map(e => e.message || JSON.stringify(e)).join('; ');
+      } else if (typeof parsed === 'object' && parsed.message) {
+        errorMessage = parsed.message;
+      }
+    } catch {
+      // Not JSON, use as is
+    }
+    
     res.status(500).json({
       success: false,
-      error: error.message || "Unknown error occurred",
+      error: errorMessage
     });
   }
 });
@@ -380,19 +407,19 @@ app.post("/api/products/:id(*)/configure", async (req, res) => {
  * POST /api/calculate-price
  * Calculate price without saving (for preview)
  */
-app.post("/api/calculate-price", async (req, res) => {
+app.post('/api/calculate-price', async (req, res) => {
   try {
     const config = req.body;
     const priceBreakdown = priceCalculator.calculatePrice(config);
 
     res.json({
       success: true,
-      data: priceBreakdown,
+      data: priceBreakdown
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -403,19 +430,19 @@ app.post("/api/calculate-price", async (req, res) => {
  * GET /
  * Redirect to admin interface
  */
-app.get("/", (req, res) => {
-  res.redirect("/index.html");
+app.get('/', (req, res) => {
+  res.redirect('/index.html');
 });
 
 /**
  * GET /api/health
  * Health check endpoint
  */
-app.get("/api/health", (req, res) => {
+app.get('/api/health', (req, res) => {
   res.json({
     success: true,
-    message: "Jewelry Price App is running",
-    timestamp: new Date().toISOString(),
+    message: 'Jewelry Price App is running',
+    timestamp: new Date().toISOString()
   });
 });
 
@@ -423,24 +450,24 @@ app.get("/api/health", (req, res) => {
  * POST /api/run-setup
  * Run Shopify setup to create metafield definitions
  */
-app.post("/api/run-setup", async (req, res) => {
+app.post('/api/run-setup', async (req, res) => {
   try {
-    console.log("Running Shopify setup...");
-
+    console.log('Running Shopify setup...');
+    
     const setupLogs = [];
-
+    
     // Create metafield definitions
     const metafields = [
-      "metal_weight",
-      "metal_type",
-      "making_charge_percent",
-      "labour_type",
-      "labour_value",
-      "wastage_type",
-      "wastage_value",
-      "stone_cost",
-      "tax_percent",
-      "configured",
+      'metal_weight',
+      'metal_type', 
+      'making_charge_percent',
+      'labour_type',
+      'labour_value',
+      'wastage_type',
+      'wastage_value',
+      'stone_cost',
+      'tax_percent',
+      'configured'
     ];
 
     for (const field of metafields) {
@@ -460,25 +487,18 @@ app.post("/api/run-setup", async (req, res) => {
           }
         `;
 
-        const fieldType = [
-          "metal_type",
-          "labour_type",
-          "wastage_type",
-        ].includes(field)
-          ? "single_line_text_field"
-          : field === "configured"
-          ? "boolean"
-          : "number_decimal";
+        const fieldType = ['metal_type', 'labour_type', 'wastage_type'].includes(field) 
+          ? 'single_line_text_field' 
+          : field === 'configured' 
+            ? 'boolean' 
+            : 'number_decimal';
 
         const definition = {
-          name: field
-            .split("_")
-            .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
-            .join(" "),
-          namespace: "jewelry_config",
+          name: field.split('_').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
+          namespace: 'jewelry_config',
           key: field,
           type: fieldType,
-          ownerType: "PRODUCT",
+          ownerType: 'PRODUCT'
         };
 
         await shopifyAPI.graphql(mutation, { definition });
@@ -490,14 +510,14 @@ app.post("/api/run-setup", async (req, res) => {
 
     res.json({
       success: true,
-      message: "Setup completed! Metafield definitions created.",
-      output: setupLogs.join("\n"),
+      message: 'Setup completed! Metafield definitions created.',
+      output: setupLogs.join('\n')
     });
   } catch (error) {
-    console.error("Setup error:", error);
+    console.error('Setup error:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -506,7 +526,7 @@ app.post("/api/run-setup", async (req, res) => {
  * GET /api/status
  * Get app status and configuration
  */
-app.get("/api/status", async (req, res) => {
+app.get('/api/status', async (req, res) => {
   try {
     const metalRates = priceCalculator.getMetalRates();
     const products = await shopifyAPI.getConfiguredProducts();
@@ -517,13 +537,13 @@ app.get("/api/status", async (req, res) => {
         metalRates,
         configuredProducts: products.length,
         shopName: process.env.SHOP_NAME,
-        lastUpdated: new Date().toISOString(),
-      },
+        lastUpdated: new Date().toISOString()
+      }
     });
   } catch (error) {
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
@@ -532,34 +552,34 @@ app.get("/api/status", async (req, res) => {
  * POST /api/setup
  * Run setup to create metafield definitions (one-time)
  */
-app.post("/api/setup", async (req, res) => {
+app.post('/api/setup', async (req, res) => {
   try {
-    console.log("Running setup via API endpoint...");
-
+    console.log('Running setup via API endpoint...');
+    
     // Import and run setup
-    const { execSync } = await import("child_process");
-    const output = execSync("node server/setup.js", { encoding: "utf-8" });
-
+    const { execSync } = await import('child_process');
+    const output = execSync('node server/setup.js', { encoding: 'utf-8' });
+    
     res.json({
       success: true,
-      message: "Setup completed successfully",
-      output: output,
+      message: 'Setup completed successfully',
+      output: output
     });
   } catch (error) {
-    console.error("Setup error:", error);
+    console.error('Setup error:', error);
     res.status(500).json({
       success: false,
-      error: error.message,
+      error: error.message
     });
   }
 });
 
 // Error handling middleware
 app.use((err, req, res, next) => {
-  console.error("Error:", err);
+  console.error('Error:', err);
   res.status(500).json({
     success: false,
-    error: err.message || "Internal server error",
+    error: err.message || 'Internal server error'
   });
 });
 
@@ -567,7 +587,7 @@ app.use((err, req, res, next) => {
 app.listen(PORT, async () => {
   console.log(`\n🚀 Jewelry Price App Server running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/api/health\n`);
-
+  
   // Initialize calculators on startup
   await initializeCalculators();
 });

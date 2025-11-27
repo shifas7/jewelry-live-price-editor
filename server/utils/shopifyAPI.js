@@ -1,4 +1,4 @@
-import fetch from "node-fetch";
+import fetch from 'node-fetch';
 
 /**
  * Shopify API Helper
@@ -7,7 +7,7 @@ export class ShopifyAPI {
   constructor(shop, accessToken) {
     this.shop = shop;
     this.accessToken = accessToken;
-    this.apiVersion = "2024-10";
+    this.apiVersion = '2024-10';
   }
 
   /**
@@ -17,17 +17,17 @@ export class ShopifyAPI {
     const response = await fetch(
       `https://${this.shop}/admin/api/${this.apiVersion}/graphql.json`,
       {
-        method: "POST",
+        method: 'POST',
         headers: {
-          "Content-Type": "application/json",
-          "X-Shopify-Access-Token": this.accessToken,
+          'Content-Type': 'application/json',
+          'X-Shopify-Access-Token': this.accessToken,
         },
         body: JSON.stringify({ query, variables }),
       }
     );
 
     const result = await response.json();
-
+    
     if (result.errors) {
       throw new Error(JSON.stringify(result.errors));
     }
@@ -54,13 +54,13 @@ export class ShopifyAPI {
     const existingId = existingResult.metaobjects?.nodes?.[0]?.id;
 
     const fields = [
-      { key: "gold_24kt", value: prices.gold24kt.toString() },
-      { key: "gold_22kt", value: prices.gold22kt.toString() },
-      { key: "gold_18kt", value: prices.gold18kt.toString() },
-      { key: "gold_14kt", value: prices.gold14kt.toString() },
-      { key: "platinum", value: prices.platinum.toString() },
-      { key: "silver", value: prices.silver.toString() },
-      { key: "last_updated", value: new Date().toISOString() },
+      { key: 'gold_24kt', value: prices.gold24kt.toString() },
+      { key: 'gold_22kt', value: prices.gold22kt.toString() },
+      { key: 'gold_18kt', value: prices.gold18kt.toString() },
+      { key: 'gold_14kt', value: prices.gold14kt.toString() },
+      { key: 'platinum', value: prices.platinum.toString() },
+      { key: 'silver', value: prices.silver.toString() },
+      { key: 'last_updated', value: new Date().toISOString() }
     ];
 
     if (existingId) {
@@ -85,7 +85,7 @@ export class ShopifyAPI {
 
       const result = await this.graphql(mutation, {
         id: existingId,
-        fields,
+        fields
       });
 
       return result.metaobjectUpdate;
@@ -111,9 +111,9 @@ export class ShopifyAPI {
 
       const result = await this.graphql(mutation, {
         metaobject: {
-          type: "metal_prices",
-          fields,
-        },
+          type: 'metal_prices',
+          fields
+        }
       });
 
       return result.metaobjectCreate;
@@ -140,19 +140,15 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-
-    if (
-      !result.metaobjects ||
-      !result.metaobjects.nodes ||
-      result.metaobjects.nodes.length === 0
-    ) {
+    
+    if (!result.metaobjects || !result.metaobjects.nodes || result.metaobjects.nodes.length === 0) {
       return null;
     }
 
     const prices = {};
-    result.metaobjects.nodes[0].fields.forEach((field) => {
-      if (field.key !== "last_updated") {
-        prices[field.key.replace(/_/g, "")] = parseFloat(field.value);
+    result.metaobjects.nodes[0].fields.forEach(field => {
+      if (field.key !== 'last_updated') {
+        prices[field.key.replace(/_/g, '')] = parseFloat(field.value);
       }
     });
 
@@ -179,20 +175,20 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: "stone_id", value: stoneData.stoneId },
-      { key: "stone_type", value: stoneData.stoneType },
-      { key: "title", value: stoneData.title || "" },
-      { key: "clarity", value: stoneData.clarity || "" },
-      { key: "color", value: stoneData.color || "" },
-      { key: "shape", value: stoneData.shape || "" },
-      { key: "slabs", value: JSON.stringify(stoneData.slabs) },
+      { key: 'stone_id', value: stoneData.stoneId },
+      { key: 'stone_type', value: stoneData.stoneType },
+      { key: 'title', value: stoneData.title || '' },
+      { key: 'clarity', value: stoneData.clarity || '' },
+      { key: 'color', value: stoneData.color || '' },
+      { key: 'shape', value: stoneData.shape || '' },
+      { key: 'slabs', value: JSON.stringify(stoneData.slabs) }
     ];
 
     return await this.graphql(mutation, {
       metaobject: {
-        type: "stone_pricing",
-        fields,
-      },
+        type: 'stone_pricing',
+        fields
+      }
     });
   }
 
@@ -216,20 +212,20 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: "stone_id", value: stoneData.stoneId },
-      { key: "stone_type", value: stoneData.stoneType },
-      { key: "title", value: stoneData.title || "" },
-      { key: "clarity", value: stoneData.clarity || "" },
-      { key: "color", value: stoneData.color || "" },
-      { key: "shape", value: stoneData.shape || "" },
-      { key: "slabs", value: JSON.stringify(stoneData.slabs) },
+      { key: 'stone_id', value: stoneData.stoneId },
+      { key: 'stone_type', value: stoneData.stoneType },
+      { key: 'title', value: stoneData.title || '' },
+      { key: 'clarity', value: stoneData.clarity || '' },
+      { key: 'color', value: stoneData.color || '' },
+      { key: 'shape', value: stoneData.shape || '' },
+      { key: 'slabs', value: JSON.stringify(stoneData.slabs) }
     ];
 
     return await this.graphql(mutation, {
       id: stoneId,
       metaobject: {
-        fields,
-      },
+        fields
+      }
     });
   }
 
@@ -253,11 +249,11 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-
-    return result.metaobjects.nodes.map((node) => {
+    
+    return result.metaobjects.nodes.map(node => {
       const stone = {};
-      node.fields.forEach((field) => {
-        if (field.key === "slabs") {
+      node.fields.forEach(field => {
+        if (field.key === 'slabs') {
           stone[field.key] = JSON.parse(field.value);
         } else {
           stone[field.key] = field.value;
@@ -290,111 +286,178 @@ export class ShopifyAPI {
       }
     `;
 
+    // Helper function to normalize numeric values - ensures empty strings, null, undefined become '0'
+    const normalizeNumericValue = (value) => {
+      if (value === null || value === undefined || value === '' || isNaN(value)) {
+        return '0';
+      }
+      const num = parseFloat(value);
+      return isNaN(num) ? '0' : num.toString();
+    };
+
+    // Helper function to normalize text values - ensures null/undefined/empty become "none"
+    // Shopify doesn't allow empty strings for text metafields
+    const normalizeTextValue = (value, defaultValue = 'none') => {
+      if (value === null || value === undefined || value === '') {
+        return defaultValue;
+      }
+      return String(value);
+    };
+
     const metafields = [
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "metal_weight",
-        value: (config.metalWeight || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'metal_weight',
+        value: normalizeNumericValue(config.metalWeight),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "metal_type",
-        value: config.metalType || "gold22kt",
-        type: "single_line_text_field",
+        namespace: 'jewelry_config',
+        key: 'metal_type',
+        value: normalizeTextValue(config.metalType || 'gold22kt'),
+        type: 'single_line_text_field'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "making_charge_percent",
-        value: (config.makingChargePercent || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'making_charge_percent',
+        value: normalizeNumericValue(config.makingChargePercent),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "labour_type",
-        value: config.labourType || "percentage",
-        type: "single_line_text_field",
+        namespace: 'jewelry_config',
+        key: 'labour_type',
+        value: normalizeTextValue(config.labourType || 'percentage'),
+        type: 'single_line_text_field'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "labour_value",
-        value: (config.labourValue || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'labour_value',
+        value: normalizeNumericValue(config.labourValue),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "wastage_type",
-        value: config.wastageType || "percentage",
-        type: "single_line_text_field",
+        namespace: 'jewelry_config',
+        key: 'wastage_type',
+        value: normalizeTextValue(config.wastageType || 'percentage'),
+        type: 'single_line_text_field'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "wastage_value",
-        value: (config.wastageValue || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'wastage_value',
+        value: normalizeNumericValue(config.wastageValue),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "stone_type",
-        value: config.stoneType || "",
-        type: "single_line_text_field",
+        namespace: 'jewelry_config',
+        key: 'stone_type',
+        value: normalizeTextValue(config.stoneType, 'none'),
+        type: 'single_line_text_field'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "stone_weight",
-        value: (config.stoneWeight || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'stone_weight',
+        value: normalizeNumericValue(config.stoneWeight),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "stone_cost",
-        value: (config.stoneCost || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'stone_cost',
+        value: normalizeNumericValue(config.stoneCost),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "net_weight",
-        value: (config.netWeight || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'net_weight',
+        value: normalizeNumericValue(config.netWeight),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "gross_weight",
-        value: (config.grossWeight || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'gross_weight',
+        value: normalizeNumericValue(config.grossWeight),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "tax_percent",
-        value: (config.taxPercent || "0").toString(),
-        type: "number_decimal",
+        namespace: 'jewelry_config',
+        key: 'tax_percent',
+        value: normalizeNumericValue(config.taxPercent || 3),
+        type: 'number_decimal'
       },
       {
         ownerId: productId,
-        namespace: "jewelry_config",
-        key: "configured",
-        value: "true",
-        type: "boolean",
+        namespace: 'jewelry_config',
+        key: 'metal_rate',
+        value: normalizeNumericValue(config.metalRate),
+        type: 'number_decimal'
       },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'metal_cost',
+        value: normalizeNumericValue(config.metalCost),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'making_charge',
+        value: normalizeNumericValue(config.makingCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'labour_charge',
+        value: normalizeNumericValue(config.labourCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'wastage_charge',
+        value: normalizeNumericValue(config.wastageCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'tax_amount',
+        value: normalizeNumericValue(config.taxAmount),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'product_code',
+        value: normalizeTextValue(config.productCode, ''),
+        type: 'single_line_text_field'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'configured',
+        value: 'true',
+        type: 'boolean'
+      }
     ];
 
     const result = await this.graphql(mutation, { metafields });
-
+    
     if (result.metafieldsSet?.userErrors?.length > 0) {
-      console.error("Metafield errors:", result.metafieldsSet.userErrors);
+      console.error('Metafield errors:', result.metafieldsSet.userErrors);
       throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
     }
 
@@ -422,28 +485,19 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { id: productId });
-
+    
     const config = {};
-    result.product.metafields.nodes.forEach((field) => {
+    result.product.metafields.nodes.forEach(field => {
       const value = field.value;
-
+      
       // Convert numeric strings to numbers
-      if (
-        [
-          "metal_weight",
-          "making_charge_percent",
-          "labour_value",
-          "wastage_value",
-          "stone_weight",
-          "stone_cost",
-          "net_weight",
-          "gross_weight",
-          "tax_percent",
-        ].includes(field.key)
-      ) {
+      if (['metal_weight', 'making_charge_percent', 'labour_value', 
+           'wastage_value', 'stone_weight', 'stone_cost', 'net_weight', 
+           'gross_weight', 'tax_percent', 'metal_price', 'making_charge_amount', 
+           'tax_amount'].includes(field.key)) {
         config[field.key] = parseFloat(value);
-      } else if (field.key === "configured") {
-        config[field.key] = value === "true";
+      } else if (field.key === 'configured') {
+        config[field.key] = value === 'true';
       } else {
         config[field.key] = value;
       }
@@ -486,26 +540,17 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-
-    return result.products.nodes.map((product) => {
+    
+    return result.products.nodes.map(product => {
       const config = {};
-      product.metafields.nodes.forEach((field) => {
-        if (
-          [
-            "metal_weight",
-            "making_charge_percent",
-            "labour_value",
-            "wastage_value",
-            "stone_weight",
-            "stone_cost",
-            "net_weight",
-            "gross_weight",
-            "tax_percent",
-          ].includes(field.key)
-        ) {
+      product.metafields.nodes.forEach(field => {
+        if (['metal_weight', 'making_charge_percent', 'labour_value', 
+             'wastage_value', 'stone_weight', 'stone_cost', 'net_weight',
+             'gross_weight', 'tax_percent', 'metal_price', 'making_charge_amount',
+             'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
-        } else if (field.key === "configured") {
-          config[field.key] = field.value === "true";
+        } else if (field.key === 'configured') {
+          config[field.key] = field.value === 'true';
         } else {
           config[field.key] = field.value;
         }
@@ -516,9 +561,9 @@ export class ShopifyAPI {
         title: product.title,
         status: product.status,
         vendor: product.vendor,
-        currentPrice: product.variants.nodes[0]?.price || "0",
+        currentPrice: product.variants.nodes[0]?.price || '0',
         variantId: product.variants.nodes[0]?.id,
-        configuration: config,
+        configuration: config
       };
     });
   }
@@ -544,25 +589,19 @@ export class ShopifyAPI {
 
     // Extract product ID from variant ID
     // variantId format: gid://shopify/ProductVariant/123456
-    const variantNumericId = variantId.split("/").pop();
-    const productIdMatch = variantId.match(
-      /gid:\/\/shopify\/ProductVariant\/(\d+)/
-    );
-
+    const variantNumericId = variantId.split('/').pop();
+    const productIdMatch = variantId.match(/gid:\/\/shopify\/ProductVariant\/(\d+)/);
+    
     // We need to get the product ID first
     // For now, let's use a simpler approach with the variants array
     const result = await this.graphql(mutation, {
       input: {
-        id: variantId
-          .replace("/ProductVariant/", "/Product/")
-          .replace(/\/\d+$/, ""),
-        variants: [
-          {
-            id: variantId,
-            price: newPrice.toString(),
-          },
-        ],
-      },
+        id: variantId.replace('/ProductVariant/', '/Product/').replace(/\/\d+$/, ''),
+        variants: [{
+          id: variantId,
+          price: newPrice.toString()
+        }]
+      }
     });
 
     if (result.productUpdate?.userErrors?.length > 0) {
@@ -587,7 +626,7 @@ export class ShopifyAPI {
             productId: product.id,
             productTitle: product.title,
             success: false,
-            error: "Product not configured",
+            error: 'Product not configured'
           });
           continue;
         }
@@ -602,7 +641,7 @@ export class ShopifyAPI {
           wastageType: product.configuration.wastage_type,
           wastageValue: product.configuration.wastage_value,
           stoneCost: product.configuration.stone_cost,
-          taxPercent: product.configuration.tax_percent,
+          taxPercent: product.configuration.tax_percent
         });
 
         // Update variant price using productVariantsBulkUpdate
@@ -623,18 +662,14 @@ export class ShopifyAPI {
 
         const result = await this.graphql(mutation, {
           productId: product.id,
-          variants: [
-            {
-              id: product.variantId,
-              price: priceBreakdown.finalPrice.toString(),
-            },
-          ],
+          variants: [{
+            id: product.variantId,
+            price: priceBreakdown.finalPrice.toString()
+          }]
         });
 
         if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
-          throw new Error(
-            JSON.stringify(result.productVariantsBulkUpdate.userErrors)
-          );
+          throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
         }
 
         updates.push({
@@ -642,14 +677,14 @@ export class ShopifyAPI {
           productTitle: product.title,
           oldPrice: product.currentPrice,
           newPrice: priceBreakdown.finalPrice,
-          success: true,
+          success: true
         });
       } catch (error) {
         updates.push({
           productId: product.id,
           productTitle: product.title,
           success: false,
-          error: error.message,
+          error: error.message
         });
       }
     }
