@@ -474,6 +474,12 @@ export class ShopifyAPI {
           id
           title
           status
+          variants(first: 1) {
+            nodes {
+              id
+              price
+            }
+          }
           metafields(namespace: "jewelry_config", first: 20) {
             nodes {
               key
@@ -493,8 +499,8 @@ export class ShopifyAPI {
       // Convert numeric strings to numbers
       if (['metal_weight', 'making_charge_percent', 'labour_value', 
            'wastage_value', 'stone_weight', 'stone_cost', 'net_weight', 
-           'gross_weight', 'tax_percent', 'metal_price', 'making_charge_amount', 
-           'tax_amount'].includes(field.key)) {
+           'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost', 
+           'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
         config[field.key] = parseFloat(value);
       } else if (field.key === 'configured') {
         config[field.key] = value === 'true';
@@ -506,6 +512,8 @@ export class ShopifyAPI {
     config.productId = result.product.id;
     config.productTitle = result.product.title;
     config.productStatus = result.product.status;
+    config.variantId = result.product.variants.nodes[0]?.id;
+    config.currentPrice = result.product.variants.nodes[0]?.price || '0';
 
     return config;
   }
@@ -546,8 +554,8 @@ export class ShopifyAPI {
       product.metafields.nodes.forEach(field => {
         if (['metal_weight', 'making_charge_percent', 'labour_value', 
              'wastage_value', 'stone_weight', 'stone_cost', 'net_weight',
-             'gross_weight', 'tax_percent', 'metal_price', 'making_charge_amount',
-             'tax_amount'].includes(field.key)) {
+             'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
+             'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
         } else if (field.key === 'configured') {
           config[field.key] = field.value === 'true';
@@ -571,13 +579,14 @@ export class ShopifyAPI {
   /**
    * Update product variant price
    */
-  async updateProductPrice(variantId, newPrice) {
-    // Use productUpdate mutation to update variant price
+  async updateProductPrice(productId, variantId, newPrice) {
+    // Use productVariantsBulkUpdate mutation to update variant price
     const mutation = `
-      mutation UpdateProduct($input: ProductInput!) {
-        productUpdate(input: $input) {
-          product {
+      mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+        productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+          productVariants {
             id
+            price
           }
           userErrors {
             field
@@ -587,28 +596,19 @@ export class ShopifyAPI {
       }
     `;
 
-    // Extract product ID from variant ID
-    // variantId format: gid://shopify/ProductVariant/123456
-    const variantNumericId = variantId.split('/').pop();
-    const productIdMatch = variantId.match(/gid:\/\/shopify\/ProductVariant\/(\d+)/);
-    
-    // We need to get the product ID first
-    // For now, let's use a simpler approach with the variants array
     const result = await this.graphql(mutation, {
-      input: {
-        id: variantId.replace('/ProductVariant/', '/Product/').replace(/\/\d+$/, ''),
-        variants: [{
-          id: variantId,
-          price: newPrice.toString()
-        }]
-      }
+      productId: productId,
+      variants: [{
+        id: variantId,
+        price: newPrice.toString()
+      }]
     });
 
-    if (result.productUpdate?.userErrors?.length > 0) {
-      throw new Error(JSON.stringify(result.productUpdate.userErrors));
+    if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
+      throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
     }
 
-    return result.productUpdate;
+    return result.productVariantsBulkUpdate;
   }
 
   /**

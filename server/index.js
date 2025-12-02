@@ -369,15 +369,38 @@ app.post('/api/products/:id(*)/configure', async (req, res) => {
     
     console.log('Metafields saved successfully:', result.metafields?.length || 0, 'fields');
 
-    // Note: Price will be updated when "Refresh Prices" is clicked
-    // This avoids complexity with variant price updates
+    // Get product variant ID to update price
+    let priceUpdateSuccess = false;
+    let priceUpdateError = null;
+    try {
+      const productConfig = await shopifyAPI.getProductConfiguration(productId);
+      if (productConfig.variantId) {
+        await shopifyAPI.updateProductPrice(productId, productConfig.variantId, priceBreakdown.finalPrice);
+        console.log('Variant price updated successfully to:', priceBreakdown.finalPrice);
+        priceUpdateSuccess = true;
+      } else {
+        console.warn('No variant found for product:', productId);
+        priceUpdateError = 'No variant found for this product';
+      }
+    } catch (error) {
+      console.error('Error updating variant price:', error);
+      priceUpdateError = error.message;
+      // Don't fail the entire request if price update fails - metafields are saved
+    }
+
+    const message = priceUpdateSuccess 
+      ? 'Product configured and price updated successfully!'
+      : priceUpdateError
+        ? `Product configured successfully, but price update failed: ${priceUpdateError}. You can update it manually using "Refresh Prices".`
+        : 'Product configured successfully. Click "Refresh Prices" in Dashboard to update product price in store.';
 
     res.json({
       success: true,
-      message: 'Product configured successfully. Click "Refresh Prices" in Dashboard to update product price in store.',
+      message: message,
       data: {
         configuration: normalizedConfig,
-        priceBreakdown
+        priceBreakdown,
+        priceUpdated: priceUpdateSuccess
       }
     });
   } catch (error) {
