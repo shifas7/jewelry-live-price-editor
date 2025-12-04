@@ -577,6 +577,64 @@ export class ShopifyAPI {
   }
 
   /**
+   * Search products by query string
+   */
+  async searchProducts(query) {
+    const graphqlQuery = `
+      query SearchProducts($query: String!) {
+        products(first: 50, query: $query) {
+          nodes {
+            id
+            title
+            status
+            vendor
+            variants(first: 1) {
+              nodes {
+                id
+                price
+              }
+            }
+            metafields(namespace: "jewelry_config", first: 20) {
+              nodes {
+                key
+                value
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(graphqlQuery, { query });
+    
+    return result.products.nodes.map(product => {
+      const config = {};
+      product.metafields.nodes.forEach(field => {
+        if (['metal_weight', 'making_charge_percent', 'labour_value', 
+             'wastage_value', 'stone_weight', 'stone_cost', 'net_weight',
+             'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
+             'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
+          config[field.key] = parseFloat(field.value);
+        } else if (field.key === 'configured') {
+          config[field.key] = field.value === 'true';
+        } else {
+          config[field.key] = field.value;
+        }
+      });
+
+      return {
+        id: product.id,
+        title: product.title,
+        status: product.status,
+        vendor: product.vendor,
+        currentPrice: product.variants.nodes[0]?.price || '0',
+        variantId: product.variants.nodes[0]?.id,
+        configuration: config
+      };
+    });
+  }
+
+  /**
    * Update product variant price
    */
   async updateProductPrice(productId, variantId, newPrice) {
