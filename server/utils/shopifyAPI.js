@@ -269,6 +269,64 @@ export class ShopifyAPI {
    * Update product with price configuration metafields
    */
   async updateProductConfiguration(productId, config) {
+    // Delete old stone metafields if we're saving a new stones array
+    if (config.stones && Array.isArray(config.stones)) {
+      // Build metafield identifiers for old stone metafields
+      const oldStoneMetafieldIdentifiers = [
+        {
+          ownerId: productId,
+          namespace: 'jewelry_config',
+          key: 'stone_type'
+        },
+        {
+          ownerId: productId,
+          namespace: 'jewelry_config',
+          key: 'stone_weight'
+        },
+        {
+          ownerId: productId,
+          namespace: 'jewelry_config',
+          key: 'stone_cost'
+        }
+      ];
+      
+      // Delete old stone metafields
+      const deleteMutation = `
+        mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
+          metafieldsDelete(metafields: $metafields) {
+            deletedMetafields {
+              namespace
+              key
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+      
+      try {
+        const deleteResult = await this.graphql(deleteMutation, { metafields: oldStoneMetafieldIdentifiers });
+        if (deleteResult.metafieldsDelete?.userErrors?.length > 0) {
+          // Filter out errors for metafields that don't exist (which is fine)
+          const realErrors = deleteResult.metafieldsDelete.userErrors.filter(
+            err => !err.message?.includes('not found') && !err.message?.includes('does not exist')
+          );
+          if (realErrors.length > 0) {
+            console.warn('Errors deleting old stone metafields:', realErrors);
+          } else {
+            console.log('Deleted old stone metafields (some may not have existed)');
+          }
+        } else {
+          console.log('Deleted old stone metafields:', oldStoneMetafieldIdentifiers.length);
+        }
+      } catch (error) {
+        console.warn('Could not delete old stone metafields:', error);
+        // Continue anyway - new stones array will be saved
+      }
+    }
+    
     const mutation = `
       mutation UpdateProductMetafields($metafields: [MetafieldsSetInput!]!) {
         metafieldsSet(metafields: $metafields) {
@@ -357,23 +415,9 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: 'jewelry_config',
-        key: 'stone_type',
-        value: normalizeTextValue(config.stoneType, 'none'),
-        type: 'single_line_text_field'
-      },
-      {
-        ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'stone_weight',
-        value: normalizeNumericValue(config.stoneWeight),
-        type: 'number_decimal'
-      },
-      {
-        ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'stone_cost',
-        value: normalizeNumericValue(config.stoneCost),
-        type: 'number_decimal'
+        key: 'stones',
+        value: config.stones && Array.isArray(config.stones) ? JSON.stringify(config.stones) : '[]',
+        type: 'json'
       },
       {
         ownerId: productId,
@@ -493,18 +537,42 @@ export class ShopifyAPI {
     const result = await this.graphql(query, { id: productId });
     
     const config = {};
+    let hasStonesArray = false;
+    
+    // First pass: check if stones array exists
+    result.product.metafields.nodes.forEach(field => {
+      if (field.key === 'stones') {
+        hasStonesArray = true;
+      }
+    });
+    
+    // Second pass: parse fields, ignoring old stone fields if stones array exists
     result.product.metafields.nodes.forEach(field => {
       const value = field.value;
       
+      // Skip old stone fields if new stones array exists
+      if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+        return;
+      }
+      
+      // Parse stones JSON array
+      if (field.key === 'stones') {
+        try {
+          config[field.key] = JSON.parse(value || '[]');
+        } catch (e) {
+          config[field.key] = [];
+        }
+      }
       // Convert numeric strings to numbers
-      if (['metal_weight', 'making_charge_percent', 'labour_value', 
-           'wastage_value', 'stone_weight', 'stone_cost', 'net_weight', 
+      else if (['metal_weight', 'making_charge_percent', 'labour_value', 
+           'wastage_value', 'net_weight', 
            'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost', 
            'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
         config[field.key] = parseFloat(value);
       } else if (field.key === 'configured') {
         config[field.key] = value === 'true';
-      } else {
+      } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+        // Only include old stone fields if stones array doesn't exist
         config[field.key] = value;
       }
     });
@@ -551,15 +619,40 @@ export class ShopifyAPI {
     
     return result.products.nodes.map(product => {
       const config = {};
+      let hasStonesArray = false;
+      
+      // First pass: check if stones array exists
       product.metafields.nodes.forEach(field => {
-        if (['metal_weight', 'making_charge_percent', 'labour_value', 
-             'wastage_value', 'stone_weight', 'stone_cost', 'net_weight',
+        if (field.key === 'stones') {
+          hasStonesArray = true;
+        }
+      });
+      
+      // Second pass: parse fields, ignoring old stone fields if stones array exists
+      product.metafields.nodes.forEach(field => {
+        // Skip old stone fields if new stones array exists
+        if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          return;
+        }
+        
+        // Parse stones JSON array
+        if (field.key === 'stones') {
+          try {
+            config[field.key] = JSON.parse(field.value || '[]');
+          } catch (e) {
+            config[field.key] = [];
+          }
+        }
+        // Convert numeric strings to numbers
+        else if (['metal_weight', 'making_charge_percent', 'labour_value', 
+             'wastage_value', 'net_weight',
              'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
              'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
         } else if (field.key === 'configured') {
           config[field.key] = field.value === 'true';
-        } else {
+        } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;
         }
       });
@@ -609,15 +702,40 @@ export class ShopifyAPI {
     
     return result.products.nodes.map(product => {
       const config = {};
+      let hasStonesArray = false;
+      
+      // First pass: check if stones array exists
       product.metafields.nodes.forEach(field => {
-        if (['metal_weight', 'making_charge_percent', 'labour_value', 
-             'wastage_value', 'stone_weight', 'stone_cost', 'net_weight',
+        if (field.key === 'stones') {
+          hasStonesArray = true;
+        }
+      });
+      
+      // Second pass: parse fields, ignoring old stone fields if stones array exists
+      product.metafields.nodes.forEach(field => {
+        // Skip old stone fields if new stones array exists
+        if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          return;
+        }
+        
+        // Parse stones JSON array
+        if (field.key === 'stones') {
+          try {
+            config[field.key] = JSON.parse(field.value || '[]');
+          } catch (e) {
+            config[field.key] = [];
+          }
+        }
+        // Convert numeric strings to numbers
+        else if (['metal_weight', 'making_charge_percent', 'labour_value', 
+             'wastage_value', 'net_weight',
              'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
              'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
         } else if (field.key === 'configured') {
           config[field.key] = field.value === 'true';
-        } else {
+        } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;
         }
       });

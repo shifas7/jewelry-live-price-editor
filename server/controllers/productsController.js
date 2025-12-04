@@ -74,6 +74,21 @@ export async function configureProduct(req, res) {
       });
     }
 
+    // Process stones array - calculate total stone cost
+    let stones = [];
+    let totalStoneCost = 0;
+    
+    if (config.stones && Array.isArray(config.stones)) {
+      stones = config.stones.map(stone => ({
+        stoneType: stone.stoneType || '',
+        stoneWeight: normalizeNumeric(stone.stoneWeight),
+        stoneCost: normalizeNumeric(stone.stoneCost)
+      }));
+      
+      // Calculate total stone cost from all stones
+      totalStoneCost = stones.reduce((sum, stone) => sum + stone.stoneCost, 0);
+    }
+
     // Normalize all numeric fields to default to 0 if empty
     const normalizedConfig = {
       metalWeight: normalizeNumeric(config.metalWeight),
@@ -83,9 +98,8 @@ export async function configureProduct(req, res) {
       labourValue: normalizeNumeric(config.labourValue),
       wastageType: config.wastageType || 'percentage',
       wastageValue: normalizeNumeric(config.wastageValue),
-      stoneType: config.stoneType || 'none',
-      stoneWeight: normalizeNumeric(config.stoneWeight),
-      stoneCost: normalizeNumeric(config.stoneCost),
+      stones: stones, // Include stones array
+      stoneCost: totalStoneCost, // Total stone cost for price calculation
       netWeight: normalizeNumeric(config.netWeight),
       grossWeight: normalizeNumeric(config.grossWeight),
       taxPercent: normalizeNumeric(config.taxPercent) || 3 // Default tax to 3% if not provided
@@ -179,7 +193,23 @@ export async function calculatePrice(req, res) {
   try {
     const config = req.body;
     const priceCalculator = getPriceCalculator();
-    const priceBreakdown = priceCalculator.calculatePrice(config);
+    
+    // If stones array is provided, calculate total stone cost
+    let stoneCost = config.stoneCost || 0;
+    if (config.stones && Array.isArray(config.stones)) {
+      stoneCost = config.stones.reduce((sum, stone) => {
+        const cost = parseFloat(stone.stoneCost) || 0;
+        return sum + cost;
+      }, 0);
+    }
+    
+    // Create config for calculator with total stone cost
+    const configForCalculator = {
+      ...config,
+      stoneCost: stoneCost
+    };
+    
+    const priceBreakdown = priceCalculator.calculatePrice(configForCalculator);
 
     res.json({
       success: true,

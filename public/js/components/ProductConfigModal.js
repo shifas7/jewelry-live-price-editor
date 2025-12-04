@@ -1,6 +1,22 @@
-const { useState, useEffect } = React;
+const { useState, useEffect, useRef } = React;
 
 function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePrice, configureProduct, fetchStonePrices }) {
+    // Initialize stones array from configuration
+    const initializeStones = () => {
+        if (product.configuration?.stones) {
+            // If stones array exists, parse it (it might be a JSON string)
+            try {
+                const stones = typeof product.configuration.stones === 'string' 
+                    ? JSON.parse(product.configuration.stones) 
+                    : product.configuration.stones;
+                return Array.isArray(stones) ? stones : [];
+            } catch (e) {
+                return [];
+            }
+        }
+        return [];
+    };
+
     const [config, setConfig] = useState({
         metalWeight: product.configuration?.metal_weight || '',
         metalType: product.configuration?.metal_type || 'gold22kt',
@@ -9,9 +25,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         labourValue: product.configuration?.labour_value || '',
         wastageType: product.configuration?.wastage_type || 'percentage',
         wastageValue: product.configuration?.wastage_value || '',
-        stoneType: (product.configuration?.stone_type && product.configuration?.stone_type !== 'none') ? product.configuration?.stone_type : '',
-        stoneWeight: product.configuration?.stone_weight || '',
-        stoneCost: product.configuration?.stone_cost || '',
+        stones: initializeStones(),
         netWeight: product.configuration?.net_weight || '',
         grossWeight: product.configuration?.gross_weight || '',
         taxPercent: product.configuration?.tax_percent || '3'
@@ -19,6 +33,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
 
     const [calculation, setCalculation] = useState(null);
     const [availableStones, setAvailableStones] = useState([]);
+    const prevStonesKeyRef = useRef('');
 
     // Load available stones
     useEffect(() => {
@@ -36,25 +51,39 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
 
     // Calculate stone cost when stone type or weight changes (ONLY for diamonds)
     useEffect(() => {
-        const selectedStone = availableStones.find(s => s.stone_id === config.stoneType);
-        const isDiamond = selectedStone?.stone_type?.toLowerCase() === 'diamond';
+        if (!availableStones.length || !config.stones.length) return;
+
+        // Create a key from stone types and weights (not costs) to detect actual changes
+        const stonesKey = config.stones.map(s => `${s.stoneType}-${s.stoneWeight}`).join('|');
         
-        if (isDiamond && config.stoneType && config.stoneWeight) {
-            calculateStoneCost();
-        }
-    }, [config.stoneType, config.stoneWeight, availableStones]);
+        // Only recalculate if the key changed (type or weight changed, not just cost)
+        if (stonesKey === prevStonesKeyRef.current) return;
+        prevStonesKeyRef.current = stonesKey;
 
-    const calculateStoneCost = () => {
-        const selectedStone = availableStones.find(s => s.stone_id === config.stoneType);
+        const updatedStones = config.stones.map((stone, index) => {
+            if (!stone.stoneType || !stone.stoneWeight) return stone;
+
+            const selectedStone = availableStones.find(s => s.stone_id === stone.stoneType);
+            const isDiamond = selectedStone?.stone_type?.toLowerCase() === 'diamond';
+            
+            if (isDiamond) {
+                return calculateStoneCostForIndex(stone, selectedStone, index);
+            }
+            return stone;
+        });
+
+        setConfig(prev => ({ ...prev, stones: updatedStones }));
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [config.stones, availableStones.length]);
+
+    const calculateStoneCostForIndex = (stone, selectedStone, index) => {
         if (!selectedStone || !selectedStone.slabs) {
-            console.log('No stone or slabs found');
-            return;
+            return { ...stone, stoneCost: '' };
         }
 
-        const weight = parseFloat(config.stoneWeight);
+        const weight = parseFloat(stone.stoneWeight);
         if (isNaN(weight) || weight <= 0) {
-            console.log('Invalid weight:', config.stoneWeight);
-            return;
+            return { ...stone, stoneCost: '' };
         }
 
         // Find matching slab
@@ -65,10 +94,10 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         if (slab) {
             const pricePerCarat = parseFloat(slab.pricePerCarat);
             const cost = weight * pricePerCarat;
-            setConfig(prev => ({ ...prev, stoneCost: cost.toFixed(2) }));
+            return { ...stone, stoneCost: cost.toFixed(2) };
         } else {
-            console.log('No matching slab found for weight:', weight);
-            alert(`No price slab found for weight ${weight} carat. Please check your stone pricing configuration.`);
+            console.log(`No matching slab found for stone ${index + 1}, weight: ${weight} carat`);
+            return { ...stone, stoneCost: '' };
         }
     };
 
@@ -76,11 +105,23 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         if (config.metalWeight && config.metalType) {
             calculatePricePreview();
         }
-    }, [config]);
+    }, [config.metalWeight, config.metalType, config.makingChargePercent, config.labourType, config.labourValue, config.wastageType, config.wastageValue, config.taxPercent, config.stones.map(s => s.stoneCost).join(',')]);
 
     const calculatePricePreview = async () => {
         try {
-            const priceBreakdown = await calculatePrice(config);
+            // Calculate total stone cost from all stones
+            const totalStoneCost = config.stones.reduce((sum, stone) => {
+                const cost = parseFloat(stone.stoneCost) || 0;
+                return sum + cost;
+            }, 0);
+
+            // Create config for API call with total stone cost
+            const configForAPI = {
+                ...config,
+                stoneCost: totalStoneCost
+            };
+
+            const priceBreakdown = await calculatePrice(configForAPI);
             setCalculation(priceBreakdown);
         } catch (error) {
             console.error('Error calculating price:', error);
@@ -100,14 +141,20 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                 return;
             }
 
+            // Normalize stones array - ensure all numeric fields are properly formatted
+            const normalizedStones = config.stones.map(stone => ({
+                stoneType: stone.stoneType || '',
+                stoneWeight: stone.stoneWeight === '' ? '0' : stone.stoneWeight,
+                stoneCost: stone.stoneCost === '' ? '0' : stone.stoneCost
+            }));
+
             // Normalize empty values to 0 for numeric fields before sending
             const configToSend = {
                 ...config,
                 makingChargePercent: config.makingChargePercent === '' ? '0' : config.makingChargePercent,
                 labourValue: config.labourValue === '' ? '0' : config.labourValue,
                 wastageValue: config.wastageValue === '' ? '0' : config.wastageValue,
-                stoneWeight: config.stoneWeight === '' ? '0' : config.stoneWeight,
-                stoneCost: config.stoneCost === '' ? '0' : config.stoneCost,
+                stones: normalizedStones,
                 netWeight: config.netWeight === '' ? '0' : config.netWeight,
                 grossWeight: config.grossWeight === '' ? '0' : config.grossWeight,
                 taxPercent: config.taxPercent === '' ? '3' : config.taxPercent
@@ -271,82 +318,157 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                             </div>
                         </div>
 
-                        <div className="form-group">
-                            <label>Stone Type (Optional)</label>
-                            <select
-                                value={config.stoneType}
-                                onChange={(e) => {
-                                    setConfig({...config, stoneType: e.target.value, stoneWeight: '', stoneCost: ''});
+                    </div>
+
+                    {/* Stones Section */}
+                    <div style={{marginTop: '24px', borderTop: '1px solid #e0e0e0', paddingTop: '16px'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+                            <h3 style={{margin: 0, fontSize: '16px'}}>Stones (Optional)</h3>
+                            <button 
+                                type="button"
+                                className="btn btn-secondary" 
+                                onClick={() => {
+                                    setConfig({
+                                        ...config,
+                                        stones: [...config.stones, { stoneType: '', stoneWeight: '', stoneCost: '' }]
+                                    });
                                 }}
+                                style={{padding: '6px 12px', fontSize: '14px'}}
                             >
-                                <option value="">No Stone</option>
-                                {availableStones.map((stone, idx) => (
-                                    <option key={idx} value={stone.stone_id}>
-                                        {stone.stone_type} (ID: {stone.stone_id})
-                                    </option>
-                                ))}
-                            </select>
+                                + Add More Stone
+                            </button>
                         </div>
 
-                        {config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' && (
-                            <div className="form-group">
-                                <label>Diamond Weight (Optional)</label>
-                                <div className="input-suffix" data-suffix="Carat">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={config.stoneWeight}
-                                        onChange={(e) => setConfig({...config, stoneWeight: e.target.value})}
-                                        placeholder="0"
-                                    />
-                                </div>
+                        {config.stones.length === 0 && (
+                            <div style={{padding: '12px', backgroundColor: '#f5f5f5', borderRadius: '4px', color: '#666', fontSize: '14px'}}>
+                                No stones added. Click "Add More Stone" to add stones.
                             </div>
                         )}
 
-                        {config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() !== 'diamond' && (
-                            <div className="form-group">
-                                <label>Stone Weight (Optional)</label>
-                                <div className="input-suffix" data-suffix="Carat">
-                                    <input
-                                        type="number"
-                                        step="0.01"
-                                        value={config.stoneWeight}
-                                        onChange={(e) => setConfig({...config, stoneWeight: e.target.value})}
-                                        placeholder="0"
-                                    />
-                                </div>
-                            </div>
-                        )}
+                        {config.stones.map((stone, stoneIndex) => {
+                            const selectedStone = availableStones.find(s => s.stone_id === stone.stoneType);
+                            const isDiamond = selectedStone?.stone_type?.toLowerCase() === 'diamond';
+                            
+                            return (
+                                <div key={stoneIndex} style={{
+                                    border: '1px solid #e0e0e0',
+                                    borderRadius: '8px',
+                                    padding: '16px',
+                                    marginBottom: '16px',
+                                    backgroundColor: '#fafafa',
+                                    position: 'relative'
+                                }}>
+                                    <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
+                                        <h4 style={{margin: 0, fontSize: '14px', fontWeight: '600'}}>Stone {stoneIndex + 1}</h4>
+                                        {config.stones.length > 0 && (
+                                            <button
+                                                type="button"
+                                                onClick={() => {
+                                                    const newStones = config.stones.filter((_, idx) => idx !== stoneIndex);
+                                                    setConfig({ ...config, stones: newStones });
+                                                }}
+                                                style={{
+                                                    background: 'none',
+                                                    border: 'none',
+                                                    color: '#d32f2f',
+                                                    cursor: 'pointer',
+                                                    fontSize: '18px',
+                                                    padding: '0 8px',
+                                                    lineHeight: '1'
+                                                }}
+                                                title="Remove stone"
+                                            >
+                                                ×
+                                            </button>
+                                        )}
+                                    </div>
 
-                        <div className="form-group">
-                            <label>Stone Cost (Optional)</label>
-                            <div className="input-suffix" data-suffix="INR">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={config.stoneCost}
-                                    onChange={(e) => setConfig({...config, stoneCost: e.target.value})}
-                                    disabled={config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond'}
-                                    placeholder={config.stoneType && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' ? 'Auto-calculated' : '0'}
-                                />
-                            </div>
-                            {config.stoneType && config.stoneWeight && availableStones.find(s => s.stone_id === config.stoneType)?.stone_type?.toLowerCase() === 'diamond' && (() => {
-                                const selectedStone = availableStones.find(s => s.stone_id === config.stoneType);
-                                const weight = parseFloat(config.stoneWeight);
-                                const slab = selectedStone?.slabs?.find(s => 
-                                    weight >= parseFloat(s.fromWeight) && weight <= parseFloat(s.toWeight)
-                                );
-                                if (slab) {
-                                    return (
-                                        <div style={{fontSize: '12px', color: '#6d7175', marginTop: '4px'}}>
-                                            💎 {weight} carat × ₹{slab.pricePerCarat}/carat = ₹{config.stoneCost}
+                                    <div className="form-grid">
+                                        <div className="form-group">
+                                            <label>Stone Type</label>
+                                            <select
+                                                value={stone.stoneType}
+                                                onChange={(e) => {
+                                                    const newStones = [...config.stones];
+                                                    newStones[stoneIndex] = {
+                                                        ...newStones[stoneIndex],
+                                                        stoneType: e.target.value,
+                                                        stoneWeight: '',
+                                                        stoneCost: ''
+                                                    };
+                                                    setConfig({ ...config, stones: newStones });
+                                                }}
+                                            >
+                                                <option value="">Select Stone Type</option>
+                                                {availableStones.map((s, idx) => (
+                                                    <option key={idx} value={s.stone_id}>
+                                                        {s.stone_type} (ID: {s.stone_id})
+                                                    </option>
+                                                ))}
+                                            </select>
                                         </div>
-                                    );
-                                }
-                                return null;
-                            })()}
-                        </div>
 
+                                        <div className="form-group">
+                                            <label>{isDiamond ? 'Diamond Weight' : 'Stone Weight'}</label>
+                                            <div className="input-suffix" data-suffix="Carat">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={stone.stoneWeight}
+                                                    onChange={(e) => {
+                                                        const newStones = [...config.stones];
+                                                        newStones[stoneIndex] = {
+                                                            ...newStones[stoneIndex],
+                                                            stoneWeight: e.target.value
+                                                        };
+                                                        setConfig({ ...config, stones: newStones });
+                                                    }}
+                                                    placeholder="0"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Stone Cost</label>
+                                            <div className="input-suffix" data-suffix="INR">
+                                                <input
+                                                    type="number"
+                                                    step="0.01"
+                                                    value={stone.stoneCost}
+                                                    onChange={(e) => {
+                                                        const newStones = [...config.stones];
+                                                        newStones[stoneIndex] = {
+                                                            ...newStones[stoneIndex],
+                                                            stoneCost: e.target.value
+                                                        };
+                                                        setConfig({ ...config, stones: newStones });
+                                                    }}
+                                                    disabled={isDiamond}
+                                                    placeholder={isDiamond ? 'Auto-calculated' : '0'}
+                                                />
+                                            </div>
+                                            {isDiamond && stone.stoneType && stone.stoneWeight && (() => {
+                                                const weight = parseFloat(stone.stoneWeight);
+                                                const slab = selectedStone?.slabs?.find(s => 
+                                                    weight >= parseFloat(s.fromWeight) && weight <= parseFloat(s.toWeight)
+                                                );
+                                                if (slab && stone.stoneCost) {
+                                                    return (
+                                                        <div style={{fontSize: '12px', color: '#6d7175', marginTop: '4px'}}>
+                                                            💎 {weight} carat × ₹{slab.pricePerCarat}/carat = ₹{stone.stoneCost}
+                                                        </div>
+                                                    );
+                                                }
+                                                return null;
+                                            })()}
+                                        </div>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <div className="form-grid">
                         <div className="form-group">
                             <label>Tax (Optional, Default: 3%)</label>
                             <div className="input-suffix" data-suffix="%">
