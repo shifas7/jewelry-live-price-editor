@@ -17,6 +17,9 @@ function App() {
     const [products, setProducts] = useState([]);
     const [selectedProduct, setSelectedProduct] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [productsPageInfo, setProductsPageInfo] = useState(null);
+    const [currentPage, setCurrentPage] = useState(1);
+    const [pageCursors, setPageCursors] = useState({ 1: null }); // Store cursor for each page
     const [stonePrices, setStonePrices] = useState([]);
     const [showStoneModal, setShowStoneModal] = useState(false);
     const [selectedStone, setSelectedStone] = useState(null);
@@ -37,16 +40,45 @@ function App() {
         }
     };
 
-    const loadProducts = async () => {
+    const loadProducts = async (page = 1, cursor = null) => {
         try {
             setLoading(true);
-            const products = await API.fetchProducts();
-            setProducts(products);
+            const result = await API.fetchProducts(cursor, 50);
+            setProducts(result.products);
+            setProductsPageInfo(result.pageInfo);
+            setCurrentPage(page);
+            // Store cursor for next page if available
+            if (result.pageInfo.hasNextPage && result.pageInfo.endCursor) {
+                setPageCursors(prev => ({
+                    ...prev,
+                    [page + 1]: result.pageInfo.endCursor
+                }));
+            }
         } catch (error) {
             console.error('Error loading products:', error);
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleNextPage = () => {
+        if (productsPageInfo?.hasNextPage && productsPageInfo?.endCursor) {
+            const nextPage = currentPage + 1;
+            loadProducts(nextPage, productsPageInfo.endCursor);
+        }
+    };
+
+    const handlePrevPage = () => {
+        if (currentPage > 1) {
+            const prevPage = currentPage - 1;
+            const cursor = pageCursors[prevPage] || null;
+            loadProducts(prevPage, cursor);
+        }
+    };
+
+    const handleRefreshProducts = () => {
+        setPageCursors({ 1: null });
+        loadProducts(1, null);
     };
 
     const loadStonePrices = async () => {
@@ -150,6 +182,11 @@ function App() {
                     products={products}
                     loading={loading}
                     setSelectedProduct={setSelectedProduct}
+                    pageInfo={productsPageInfo}
+                    currentPage={currentPage}
+                    onNextPage={handleNextPage}
+                    onPrevPage={handlePrevPage}
+                    onRefresh={handleRefreshProducts}
                 />
             )}
 

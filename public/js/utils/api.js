@@ -52,13 +52,20 @@ window.API = {
     },
 
     /**
-     * Fetch all products
+     * Fetch products with pagination
      */
-    async fetchProducts() {
-        const response = await fetch(`${API_BASE}/products`);
+    async fetchProducts(cursor = null, limit = 50) {
+        let url = `${API_BASE}/products?limit=${limit}`;
+        if (cursor) {
+            url += `&cursor=${encodeURIComponent(cursor)}`;
+        }
+        const response = await fetch(url);
         const data = await response.json();
         if (data.success) {
-            return data.data;
+            return {
+                products: data.data,
+                pageInfo: data.pageInfo
+            };
         }
         throw new Error(data.error || 'Failed to fetch products');
     },

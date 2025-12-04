@@ -1,16 +1,20 @@
 import { getPriceCalculator, getShopifyAPI } from '../middleware/calculatorInit.js';
 
 /**
- * Get all configured products
+ * Get all configured products with pagination
  */
 export async function getProducts(req, res) {
   try {
     const shopifyAPI = getShopifyAPI();
-    const products = await shopifyAPI.getConfiguredProducts();
+    const cursor = req.query.cursor || null;
+    const limit = parseInt(req.query.limit) || 50;
+    
+    const result = await shopifyAPI.getConfiguredProducts(cursor, limit);
     
     res.json({
       success: true,
-      data: products
+      data: result.products,
+      pageInfo: result.pageInfo
     });
   } catch (error) {
     res.status(500).json({

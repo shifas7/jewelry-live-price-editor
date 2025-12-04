@@ -1,6 +1,6 @@
 const { useState, useEffect } = React;
 
-function ProductsTab({ products, loading, setSelectedProduct }) {
+function ProductsTab({ products, loading, setSelectedProduct, pageInfo, currentPage, onNextPage, onPrevPage, onRefresh }) {
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [searchResults, setSearchResults] = useState(null);
@@ -34,6 +34,10 @@ function ProductsTab({ products, loading, setSelectedProduct }) {
     setSearchResults(null);
     setSearchError(null);
     setShowSearch(false);
+    // Refresh products list when clearing search
+    if (onRefresh) {
+      onRefresh();
+    }
   };
 
   const handleKeyPress = (e) => {
@@ -182,6 +186,51 @@ function ProductsTab({ products, loading, setSelectedProduct }) {
             )}
           </tbody>
         </table>
+      )}
+
+      {/* Pagination Controls - Only show when not in search mode */}
+      {!isSearchMode && !loading && (
+        <div
+          style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
+            marginTop: "20px",
+            padding: "16px",
+            borderTop: "1px solid #e0e0e0",
+          }}
+        >
+          <div style={{ fontSize: "14px", color: "#666" }}>
+            Showing {products.length} product{products.length !== 1 ? "s" : ""} on page {currentPage || 1}
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <button
+              className="btn btn-secondary"
+              onClick={onPrevPage}
+              disabled={!currentPage || currentPage <= 1}
+              style={{
+                opacity: (!currentPage || currentPage <= 1) ? 0.5 : 1,
+                cursor: (!currentPage || currentPage <= 1) ? "not-allowed" : "pointer",
+              }}
+            >
+              Previous
+            </button>
+            <span style={{ padding: "0 8px", fontSize: "14px" }}>
+              Page {currentPage || 1}
+            </span>
+            <button
+              className="btn btn-secondary"
+              onClick={onNextPage}
+              disabled={!pageInfo?.hasNextPage}
+              style={{
+                opacity: !pageInfo?.hasNextPage ? 0.5 : 1,
+                cursor: !pageInfo?.hasNextPage ? "not-allowed" : "pointer",
+              }}
+            >
+              Next
+            </button>
+          </div>
+        </div>
       )}
     </div>
   );

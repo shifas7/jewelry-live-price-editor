@@ -587,37 +587,78 @@ export class ShopifyAPI {
   }
 
   /**
-   * Get all configured products
+   * Get all configured products with pagination support
+   * @param {string} cursor - Cursor for pagination (optional)
+   * @param {number} limit - Number of products to fetch (default: 50)
    */
-  async getConfiguredProducts() {
-    const query = `
-      query GetConfiguredProducts {
-        products(first: 50) {
-          nodes {
-            id
-            title
-            status
-            vendor
-            variants(first: 1) {
-              nodes {
-                id
-                price
-              }
+  async getConfiguredProducts(cursor = null, limit = 50) {
+    // Build query with conditional cursor
+    const query = cursor
+      ? `
+        query GetConfiguredProducts($cursor: String!, $limit: Int!) {
+          products(first: $limit, after: $cursor) {
+            pageInfo {
+              hasNextPage
+              endCursor
             }
-            metafields(namespace: "jewelry_config", first: 20) {
-              nodes {
-                key
-                value
+            nodes {
+              id
+              title
+              status
+              vendor
+              variants(first: 1) {
+                nodes {
+                  id
+                  price
+                }
+              }
+              metafields(namespace: "jewelry_config", first: 20) {
+                nodes {
+                  key
+                  value
+                }
               }
             }
           }
         }
-      }
-    `;
+      `
+      : `
+        query GetConfiguredProducts($limit: Int!) {
+          products(first: $limit) {
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+            nodes {
+              id
+              title
+              status
+              vendor
+              variants(first: 1) {
+                nodes {
+                  id
+                  price
+                }
+              }
+              metafields(namespace: "jewelry_config", first: 20) {
+                nodes {
+                  key
+                  value
+                }
+              }
+            }
+          }
+        }
+      `;
 
-    const result = await this.graphql(query);
+    const variables = { limit };
+    if (cursor) {
+      variables.cursor = cursor;
+    }
+
+    const result = await this.graphql(query, variables);
     
-    return result.products.nodes.map(product => {
+    const products = result.products.nodes.map(product => {
       const config = {};
       let hasStonesArray = false;
       
@@ -667,6 +708,11 @@ export class ShopifyAPI {
         configuration: config
       };
     });
+
+    return {
+      products,
+      pageInfo: result.products.pageInfo
+    };
   }
 
   /**
@@ -791,10 +837,21 @@ export class ShopifyAPI {
    * Bulk update all product prices based on new metal rates
    */
   async bulkUpdatePrices(newMetalRates, calculator) {
-    const products = await this.getConfiguredProducts();
+    // Fetch all products by paginating through all pages
+    let allProducts = [];
+    let cursor = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const result = await this.getConfiguredProducts(cursor, 50);
+      allProducts = allProducts.concat(result.products);
+      hasNextPage = result.pageInfo.hasNextPage;
+      cursor = result.pageInfo.endCursor;
+    }
+
     const updates = [];
 
-    for (const product of products) {
+    for (const product of allProducts) {
       try {
         // Skip products without configuration
         if (!product.configuration?.configured) {
