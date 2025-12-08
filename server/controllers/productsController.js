@@ -86,7 +86,8 @@ export async function configureProduct(req, res) {
       stones = config.stones.map(stone => ({
         stoneType: stone.stoneType || '',
         stoneWeight: normalizeNumeric(stone.stoneWeight),
-        stoneCost: normalizeNumeric(stone.stoneCost)
+        stoneCost: normalizeNumeric(stone.stoneCost),
+        stoneCount: parseInt(stone.stoneCount) || 1
       }));
       
       // Calculate total stone cost from all stones

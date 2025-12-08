@@ -582,6 +582,7 @@ export class ShopifyAPI {
     config.productStatus = result.product.status;
     config.variantId = result.product.variants.nodes[0]?.id;
     config.currentPrice = result.product.variants.nodes[0]?.price || '0';
+    config.sku = result.product.variants.nodes[0]?.sku || '';
 
     return config;
   }
@@ -610,6 +611,7 @@ export class ShopifyAPI {
                 nodes {
                   id
                   price
+                  sku
                 }
               }
               metafields(namespace: "jewelry_config", first: 20) {
@@ -638,6 +640,7 @@ export class ShopifyAPI {
                 nodes {
                   id
                   price
+                  sku
                 }
               }
               metafields(namespace: "jewelry_config", first: 20) {
@@ -705,6 +708,7 @@ export class ShopifyAPI {
         vendor: product.vendor,
         currentPrice: product.variants.nodes[0]?.price || '0',
         variantId: product.variants.nodes[0]?.id,
+        sku: product.variants.nodes[0]?.sku || '',
         configuration: config
       };
     });
@@ -793,6 +797,7 @@ export class ShopifyAPI {
         vendor: product.vendor,
         currentPrice: product.variants.nodes[0]?.price || '0',
         variantId: product.variants.nodes[0]?.id,
+        sku: product.variants.nodes[0]?.sku || '',
         configuration: config
       };
     });

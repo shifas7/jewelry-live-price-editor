@@ -9,7 +9,11 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                 const stones = typeof product.configuration.stones === 'string' 
                     ? JSON.parse(product.configuration.stones) 
                     : product.configuration.stones;
-                return Array.isArray(stones) ? stones : [];
+                // Ensure stoneCount exists for each stone (default to 1)
+                return Array.isArray(stones) ? stones.map(stone => ({
+                    ...stone,
+                    stoneCount: stone.stoneCount !== undefined ? stone.stoneCount : 1
+                })) : [];
             } catch (e) {
                 return [];
             }
@@ -49,14 +53,14 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         }
     };
 
-    // Calculate stone cost when stone type or weight changes (ONLY for diamonds)
+    // Calculate stone cost when stone type, weight, or count changes (ONLY for diamonds)
     useEffect(() => {
         if (!availableStones.length || !config.stones.length) return;
 
-        // Create a key from stone types and weights (not costs) to detect actual changes
-        const stonesKey = config.stones.map(s => `${s.stoneType}-${s.stoneWeight}`).join('|');
+        // Create a key from stone types, weights, and counts (not costs) to detect actual changes
+        const stonesKey = config.stones.map(s => `${s.stoneType}-${s.stoneWeight}-${s.stoneCount === '' || s.stoneCount === undefined ? 1 : s.stoneCount}`).join('|');
         
-        // Only recalculate if the key changed (type or weight changed, not just cost)
+        // Only recalculate if the key changed (type, weight, or count changed, not just cost)
         if (stonesKey === prevStonesKeyRef.current) return;
         prevStonesKeyRef.current = stonesKey;
 
@@ -86,6 +90,9 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
             return { ...stone, stoneCost: '' };
         }
 
+        // Get stone count (default to 1 if not provided)
+        const stoneCount = parseInt(stone.stoneCount) || 1;
+
         // Find matching slab
         const slab = selectedStone.slabs.find(s => 
             weight >= parseFloat(s.fromWeight) && weight <= parseFloat(s.toWeight)
@@ -93,11 +100,11 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
 
         if (slab) {
             const pricePerCarat = parseFloat(slab.pricePerCarat);
-            const cost = weight * pricePerCarat;
-            return { ...stone, stoneCost: cost.toFixed(2) };
+            const cost = weight * pricePerCarat * stoneCount;
+            return { ...stone, stoneCost: cost.toFixed(2), stoneCount: stoneCount };
         } else {
             console.log(`No matching slab found for stone ${index + 1}, weight: ${weight} carat`);
-            return { ...stone, stoneCost: '' };
+            return { ...stone, stoneCost: '', stoneCount: stoneCount };
         }
     };
 
@@ -145,7 +152,8 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
             const normalizedStones = config.stones.map(stone => ({
                 stoneType: stone.stoneType || '',
                 stoneWeight: stone.stoneWeight === '' ? '0' : stone.stoneWeight,
-                stoneCost: stone.stoneCost === '' ? '0' : stone.stoneCost
+                stoneCost: stone.stoneCost === '' ? '0' : stone.stoneCost,
+                stoneCount: stone.stoneCount === undefined || stone.stoneCount === '' ? 1 : parseInt(stone.stoneCount) || 1
             }));
 
             // Normalize empty values to 0 for numeric fields before sending
@@ -200,6 +208,44 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                     <h2>CONFIGURE VARIANT</h2>
 
                     <div className="form-grid">
+                        {/* Column 1: SKU, Metal Type, Making Charge, Tax */}
+                        <div className="form-group">
+                            <label>SKU</label>
+                            <input
+                                type="text"
+                                value={product.sku || product.configuration?.sku || ''}
+                                disabled
+                                style={{backgroundColor: '#f5f5f5', cursor: 'not-allowed'}}
+                            />
+                        </div>
+
+                        {/* Column 2: Gross Weight, Labour Type, Labour Charge */}
+                        <div className="form-group">
+                            <label>Gross Weight (Optional)</label>
+                            <div className="input-suffix" data-suffix="g">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={config.grossWeight}
+                                    onChange={(e) => setConfig({...config, grossWeight: e.target.value})}
+                                    placeholder="0"
+                                />
+                            </div>
+                        </div>
+
+                        {/* Column 3: Net Weight (metal weight), Wastage Type, Wastage Charge */}
+                        <div className="form-group">
+                            <label>Net Weight (metal weight) *</label>
+                            <div className="input-suffix" data-suffix="Grams">
+                                <input
+                                    type="number"
+                                    step="0.01"
+                                    value={config.metalWeight}
+                                    onChange={(e) => setConfig({...config, metalWeight: e.target.value})}
+                                />
+                            </div>
+                        </div>
+
                         <div className="form-group">
                             <label>Metal Type *</label>
                             <select
@@ -216,15 +262,26 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         </div>
 
                         <div className="form-group">
-                            <label>Metal Weight *</label>
-                            <div className="input-suffix" data-suffix="Grams">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={config.metalWeight}
-                                    onChange={(e) => setConfig({...config, metalWeight: e.target.value})}
-                                />
-                            </div>
+                            <label>Labour Type (Optional)</label>
+                            <select
+                                value={config.labourType}
+                                onChange={(e) => setConfig({...config, labourType: e.target.value})}
+                            >
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed</option>
+                            </select>
+                        </div>
+
+                        <div className="form-group">
+                            <label>Wastage Type (Optional)</label>
+                            <select
+                                value={config.wastageType}
+                                onChange={(e) => setConfig({...config, wastageType: e.target.value})}
+                            >
+                                <option value="percentage">Percentage</option>
+                                <option value="fixed">Fixed</option>
+                                <option value="weight">Weight</option>
+                            </select>
                         </div>
 
                         <div className="form-group">
@@ -241,18 +298,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         </div>
 
                         <div className="form-group">
-                            <label>Labour Type (Optional)</label>
-                            <select
-                                value={config.labourType}
-                                onChange={(e) => setConfig({...config, labourType: e.target.value})}
-                            >
-                                <option value="percentage">Percentage</option>
-                                <option value="fixed">Fixed</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Labour Value (Optional)</label>
+                            <label>Labour Charge (Optional)</label>
                             <div className="input-suffix" data-suffix={config.labourType === 'percentage' ? '%' : 'INR'}>
                                 <input
                                     type="number"
@@ -265,19 +311,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         </div>
 
                         <div className="form-group">
-                            <label>Wastage Type (Optional)</label>
-                            <select
-                                value={config.wastageType}
-                                onChange={(e) => setConfig({...config, wastageType: e.target.value})}
-                            >
-                                <option value="percentage">Percentage</option>
-                                <option value="fixed">Fixed</option>
-                                <option value="weight">Weight</option>
-                            </select>
-                        </div>
-
-                        <div className="form-group">
-                            <label>Wastage Value (Optional)</label>
+                            <label>Wastage Charge (Optional)</label>
                             <div className="input-suffix" data-suffix={
                                 config.wastageType === 'percentage' ? '%' : 
                                 config.wastageType === 'weight' ? 'g' : 'INR'
@@ -293,31 +327,17 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         </div>
 
                         <div className="form-group">
-                            <label>Net Weight (Optional)</label>
-                            <div className="input-suffix" data-suffix="g">
+                            <label>Tax (Optional, Default: 3%)</label>
+                            <div className="input-suffix" data-suffix="%">
                                 <input
                                     type="number"
-                                    step="0.01"
-                                    value={config.netWeight}
-                                    onChange={(e) => setConfig({...config, netWeight: e.target.value})}
-                                    placeholder="0"
+                                    step="0.1"
+                                    value={config.taxPercent}
+                                    onChange={(e) => setConfig({...config, taxPercent: e.target.value})}
+                                    placeholder="3"
                                 />
                             </div>
                         </div>
-
-                        <div className="form-group">
-                            <label>Gross Weight (Optional)</label>
-                            <div className="input-suffix" data-suffix="g">
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={config.grossWeight}
-                                    onChange={(e) => setConfig({...config, grossWeight: e.target.value})}
-                                    placeholder="0"
-                                />
-                            </div>
-                        </div>
-
                     </div>
 
                     {/* Stones Section */}
@@ -330,7 +350,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                 onClick={() => {
                                     setConfig({
                                         ...config,
-                                        stones: [...config.stones, { stoneType: '', stoneWeight: '', stoneCost: '' }]
+                                        stones: [...config.stones, { stoneType: '', stoneWeight: '', stoneCost: '', stoneCount: 1 }]
                                     });
                                 }}
                                 style={{padding: '6px 12px', fontSize: '14px'}}
@@ -356,7 +376,8 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                     padding: '16px',
                                     marginBottom: '16px',
                                     backgroundColor: '#fafafa',
-                                    position: 'relative'
+                                    position: 'relative',
+                                    width: 'fit-content'
                                 }}>
                                     <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px'}}>
                                         <h4 style={{margin: 0, fontSize: '14px', fontWeight: '600'}}>Stone {stoneIndex + 1}</h4>
@@ -394,7 +415,8 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                                         ...newStones[stoneIndex],
                                                         stoneType: e.target.value,
                                                         stoneWeight: '',
-                                                        stoneCost: ''
+                                                        stoneCost: '',
+                                                        stoneCount: newStones[stoneIndex].stoneCount || 1
                                                     };
                                                     setConfig({ ...config, stones: newStones });
                                                 }}
@@ -419,13 +441,46 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                                         const newStones = [...config.stones];
                                                         newStones[stoneIndex] = {
                                                             ...newStones[stoneIndex],
-                                                            stoneWeight: e.target.value
+                                                            stoneWeight: e.target.value,
+                                                            stoneCount: newStones[stoneIndex].stoneCount || 1
                                                         };
                                                         setConfig({ ...config, stones: newStones });
                                                     }}
                                                     placeholder="0"
                                                 />
                                             </div>
+                                        </div>
+
+                                        <div className="form-group">
+                                            <label>Stone Count (Optional)</label>
+                                            <input
+                                                type="number"
+                                                step="1"
+                                                min="1"
+                                                value={stone.stoneCount !== undefined && stone.stoneCount !== '' ? stone.stoneCount : ''}
+                                                onChange={(e) => {
+                                                    const newStones = [...config.stones];
+                                                    const inputValue = e.target.value;
+                                                    // Allow empty string during typing, only parse if there's a value
+                                                    newStones[stoneIndex] = {
+                                                        ...newStones[stoneIndex],
+                                                        stoneCount: inputValue === '' ? '' : (parseInt(inputValue) || '')
+                                                    };
+                                                    setConfig({ ...config, stones: newStones });
+                                                }}
+                                                onBlur={(e) => {
+                                                    // Normalize to 1 if empty when field loses focus
+                                                    if (e.target.value === '' || parseInt(e.target.value) < 1) {
+                                                        const newStones = [...config.stones];
+                                                        newStones[stoneIndex] = {
+                                                            ...newStones[stoneIndex],
+                                                            stoneCount: 1
+                                                        };
+                                                        setConfig({ ...config, stones: newStones });
+                                                    }
+                                                }}
+                                                placeholder="1"
+                                            />
                                         </div>
 
                                         <div className="form-group">
@@ -449,13 +504,14 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                             </div>
                                             {isDiamond && stone.stoneType && stone.stoneWeight && (() => {
                                                 const weight = parseFloat(stone.stoneWeight);
+                                                const count = parseInt(stone.stoneCount) || 1;
                                                 const slab = selectedStone?.slabs?.find(s => 
                                                     weight >= parseFloat(s.fromWeight) && weight <= parseFloat(s.toWeight)
                                                 );
                                                 if (slab && stone.stoneCost) {
                                                     return (
                                                         <div style={{fontSize: '12px', color: '#6d7175', marginTop: '4px'}}>
-                                                            💎 {weight} carat × ₹{slab.pricePerCarat}/carat = ₹{stone.stoneCost}
+                                                            💎 {weight} carat × {count} × ₹{slab.pricePerCarat}/carat = ₹{stone.stoneCost}
                                                         </div>
                                                     );
                                                 }
@@ -468,20 +524,6 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         })}
                     </div>
 
-                    <div className="form-grid">
-                        <div className="form-group">
-                            <label>Tax (Optional, Default: 3%)</label>
-                            <div className="input-suffix" data-suffix="%">
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={config.taxPercent}
-                                    onChange={(e) => setConfig({...config, taxPercent: e.target.value})}
-                                    placeholder="3"
-                                />
-                            </div>
-                        </div>
-                    </div>
 
                     {calculation && (
                         <div className="calculation-result">

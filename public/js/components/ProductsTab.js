@@ -128,6 +128,7 @@ function ProductsTab({ products, loading, setSelectedProduct, pageInfo, currentP
           <thead>
             <tr>
               <th>Product</th>
+              <th>SKU</th>
               <th>Status</th>
               <th>Configuration</th>
               <th>Actions</th>
@@ -141,6 +142,9 @@ function ProductsTab({ products, loading, setSelectedProduct, pageInfo, currentP
                   <div style={{ fontSize: "12px", color: "#6d7175" }}>
                     Vendor: {product.vendor} • 1 variant
                   </div>
+                </td>
+                <td>
+                  <div style={{ fontSize: "14px" }}>{product.sku || '-'}</div>
                 </td>
                 <td>
                   <span
@@ -175,7 +179,7 @@ function ProductsTab({ products, loading, setSelectedProduct, pageInfo, currentP
             {displayProducts.length === 0 && (
               <tr>
                 <td
-                  colSpan="4"
+                  colSpan="5"
                   style={{ textAlign: "center", color: "#6d7175" }}
                 >
                   {isSearchMode
