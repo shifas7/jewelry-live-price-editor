@@ -509,6 +509,17 @@ export class ShopifyAPI {
   }
 
   /**
+   * Helper to find first variant with SKU
+   */
+  getSkuFromVariants(variants) {
+    if (!variants || !variants.nodes || variants.nodes.length === 0) {
+      return '';
+    }
+    const variantWithSku = variants.nodes.find(v => v.sku && v.sku.trim() !== '');
+    return variantWithSku ? variantWithSku.sku : '';
+  }
+
+  /**
    * Get product configuration
    */
   async getProductConfiguration(productId) {
@@ -518,10 +529,11 @@ export class ShopifyAPI {
           id
           title
           status
-          variants(first: 1) {
+          variants(first: 10) {
             nodes {
               id
               price
+              sku
             }
           }
           metafields(namespace: "jewelry_config", first: 20) {
@@ -582,7 +594,7 @@ export class ShopifyAPI {
     config.productStatus = result.product.status;
     config.variantId = result.product.variants.nodes[0]?.id;
     config.currentPrice = result.product.variants.nodes[0]?.price || '0';
-    config.sku = result.product.variants.nodes[0]?.sku || '';
+    config.sku = this.getSkuFromVariants(result.product.variants);
 
     return config;
   }
@@ -607,7 +619,7 @@ export class ShopifyAPI {
               title
               status
               vendor
-              variants(first: 1) {
+              variants(first: 10) {
                 nodes {
                   id
                   price
@@ -636,7 +648,7 @@ export class ShopifyAPI {
               title
               status
               vendor
-              variants(first: 1) {
+              variants(first: 10) {
                 nodes {
                   id
                   price
@@ -708,7 +720,7 @@ export class ShopifyAPI {
         vendor: product.vendor,
         currentPrice: product.variants.nodes[0]?.price || '0',
         variantId: product.variants.nodes[0]?.id,
-        sku: product.variants.nodes[0]?.sku || '',
+        sku: this.getSkuFromVariants(product.variants),
         configuration: config
       };
     });
@@ -731,10 +743,11 @@ export class ShopifyAPI {
             title
             status
             vendor
-            variants(first: 1) {
+            variants(first: 10) {
               nodes {
                 id
                 price
+                sku
               }
             }
             metafields(namespace: "jewelry_config", first: 20) {
@@ -797,7 +810,7 @@ export class ShopifyAPI {
         vendor: product.vendor,
         currentPrice: product.variants.nodes[0]?.price || '0',
         variantId: product.variants.nodes[0]?.id,
-        sku: product.variants.nodes[0]?.sku || '',
+        sku: this.getSkuFromVariants(product.variants),
         configuration: config
       };
     });
