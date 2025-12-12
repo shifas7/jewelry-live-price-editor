@@ -140,8 +140,9 @@ export async function configureProduct(req, res) {
     try {
       const productConfig = await shopifyAPI.getProductConfiguration(productId);
       if (productConfig.variantId) {
-        await shopifyAPI.updateProductPrice(productId, productConfig.variantId, priceBreakdown.finalPrice);
-        console.log('Variant price updated successfully to:', priceBreakdown.finalPrice);
+        const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
+        await shopifyAPI.updateProductPrice(productId, productConfig.variantId, roundedPrice);
+        console.log('Variant price updated successfully to:', roundedPrice);
         priceUpdateSuccess = true;
       } else {
         console.warn('No variant found for product:', productId);

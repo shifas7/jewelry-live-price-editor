@@ -520,6 +520,93 @@ export class ShopifyAPI {
   }
 
   /**
+   * Update only price-related metafields (used during refresh prices)
+   * @param {string} productId - Product ID
+   * @param {Object} priceBreakdown - Price breakdown from calculator
+   */
+  async updateProductPriceMetafields(productId, priceBreakdown) {
+    // Helper function to normalize numeric values
+    const normalizeNumericValue = (value) => {
+      if (value === null || value === undefined || value === '' || isNaN(value)) {
+        return '0';
+      }
+      const num = parseFloat(value);
+      return isNaN(num) ? '0' : num.toString();
+    };
+
+    const mutation = `
+      mutation UpdatePriceMetafields($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            namespace
+            key
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const metafields = [
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'metal_rate',
+        value: normalizeNumericValue(priceBreakdown.metalRate),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'metal_cost',
+        value: normalizeNumericValue(priceBreakdown.metalCost),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'making_charge',
+        value: normalizeNumericValue(priceBreakdown.makingCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'labour_charge',
+        value: normalizeNumericValue(priceBreakdown.labourCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'wastage_charge',
+        value: normalizeNumericValue(priceBreakdown.wastageCharge),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'tax_amount',
+        value: normalizeNumericValue(priceBreakdown.taxAmount),
+        type: 'number_decimal'
+      }
+    ];
+
+    const result = await this.graphql(mutation, { metafields });
+    
+    if (result.metafieldsSet?.userErrors?.length > 0) {
+      console.error('Metafield errors:', result.metafieldsSet.userErrors);
+      throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
+    }
+
+    return result.metafieldsSet;
+  }
+
+  /**
    * Get product configuration
    */
   async getProductConfiguration(productId) {
@@ -882,6 +969,18 @@ export class ShopifyAPI {
           continue;
         }
 
+        // Calculate total stone cost from stones array or fall back to old stone_cost field
+        let totalStoneCost = 0;
+        if (product.configuration.stones && Array.isArray(product.configuration.stones) && product.configuration.stones.length > 0) {
+          // Sum all stoneCost values from the stones array
+          totalStoneCost = product.configuration.stones.reduce((sum, stone) => {
+            return sum + (parseFloat(stone.stoneCost) || 0);
+          }, 0);
+        } else {
+          // Fall back to old stone_cost field for backward compatibility
+          totalStoneCost = parseFloat(product.configuration.stone_cost) || 0;
+        }
+
         // Calculate new price
         const priceBreakdown = calculator.calculatePrice({
           metalWeight: product.configuration.metal_weight,
@@ -891,9 +990,20 @@ export class ShopifyAPI {
           labourValue: product.configuration.labour_value,
           wastageType: product.configuration.wastage_type,
           wastageValue: product.configuration.wastage_value,
-          stoneCost: product.configuration.stone_cost,
+          stoneCost: totalStoneCost,
           taxPercent: product.configuration.tax_percent
         });
+
+        // Round final price up to nearest integer
+        const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
+
+        // Update price-related metafields so frontend displays correct values
+        try {
+          await this.updateProductPriceMetafields(product.id, priceBreakdown);
+        } catch (metafieldError) {
+          console.warn(`Failed to update metafields for product ${product.id}:`, metafieldError.message);
+          // Continue with price update even if metafield update fails
+        }
 
         // Update variant price using productVariantsBulkUpdate
         const mutation = `
@@ -915,7 +1025,7 @@ export class ShopifyAPI {
           productId: product.id,
           variants: [{
             id: product.variantId,
-            price: priceBreakdown.finalPrice.toString()
+            price: roundedPrice.toString()
           }]
         });
 
@@ -927,7 +1037,7 @@ export class ShopifyAPI {
           productId: product.id,
           productTitle: product.title,
           oldPrice: product.currentPrice,
-          newPrice: priceBreakdown.finalPrice,
+          newPrice: roundedPrice,
           success: true
         });
       } catch (error) {
