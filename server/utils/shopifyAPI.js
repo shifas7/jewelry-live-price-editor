@@ -1023,8 +1023,8 @@ export class ShopifyAPI {
         // Fetch stone pricing for accurate product type detection (if discount is applied later)
         const stonePricing = await this.getAllStonePricing();
         
-        // Calculate new price
-        const priceBreakdown = calculator.calculatePrice({
+        // Build config for price calculation
+        const priceConfig = {
           metalWeight: product.configuration.metal_weight,
           metalType: product.configuration.metal_type,
           makingChargePercent: product.configuration.making_charge_percent,
@@ -1033,18 +1033,75 @@ export class ShopifyAPI {
           wastageType: product.configuration.wastage_type,
           wastageValue: product.configuration.wastage_value,
           stoneCost: totalStoneCost,
-          taxPercent: product.configuration.tax_percent
-        }, null, stonePricing);
-
+          taxPercent: product.configuration.tax_percent,
+          stones: product.configuration.stones || [] // Include stones array for product type detection
+        };
+        
+        // Check if product has an existing discount
+        let discountConfig = null;
+        let finalPriceBreakdown = null;
+        
+        if (product.configuration.discount && product.configuration.discount.enabled && product.configuration.discount.discount_id) {
+          try {
+            // Fetch the full discount rules from discount_id
+            const discountRules = await this.getDiscountRuleById(product.configuration.discount.discount_id);
+            if (discountRules) {
+              // Convert discount rules to discount config format based on applied_rule
+              const appliedRule = product.configuration.discount.applied_rule || 'gold';
+              if (appliedRule === 'gold' && discountRules.gold_rules) {
+                discountConfig = {
+                  enabled: true,
+                  goldRules: discountRules.gold_rules
+                };
+              } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+                discountConfig = {
+                  enabled: true,
+                  diamondRules: discountRules.diamond_rules
+                };
+              } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+                discountConfig = {
+                  enabled: true,
+                  silverRules: discountRules.silver_rules
+                };
+              }
+            }
+          } catch (error) {
+            console.error(`Error fetching discount rules for product ${product.id}:`, error);
+            // Continue without discount if fetching fails
+          }
+        }
+        
+        // Calculate price with or without discount
+        finalPriceBreakdown = calculator.calculatePrice(priceConfig, discountConfig, stonePricing);
+        
+        // Use finalPriceAfterDiscount if discount was applied, otherwise use finalPrice
+        const finalPrice = finalPriceBreakdown.finalPriceAfterDiscount || finalPriceBreakdown.finalPrice;
+        
         // Round final price up to nearest integer
-        const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
+        const roundedPrice = Math.ceil(finalPrice);
 
         // Update price-related metafields so frontend displays correct values
         try {
-          await this.updateProductPriceMetafields(product.id, priceBreakdown);
+          await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
         } catch (metafieldError) {
           console.warn(`Failed to update metafields for product ${product.id}:`, metafieldError.message);
           // Continue with price update even if metafield update fails
+        }
+        
+        // Update discount metafield with new discount amount if discount was applied
+        if (discountConfig && finalPriceBreakdown.discount) {
+          try {
+            const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
+            const updatedDiscountMetafield = {
+              ...product.configuration.discount,
+              discount_amount: discountAmount,
+              applied_at: new Date().toISOString()
+            };
+            await this.updateProductDiscount(product.id, updatedDiscountMetafield);
+          } catch (discountError) {
+            console.warn(`Failed to update discount metafield for product ${product.id}:`, discountError.message);
+            // Continue with price update even if discount metafield update fails
+          }
         }
 
         // Update variant price using productVariantsBulkUpdate
