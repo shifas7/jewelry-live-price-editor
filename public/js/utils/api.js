@@ -112,12 +112,18 @@ window.API = {
 
     /**
      * Calculate price (preview)
+     * @param {Object} config - Product configuration
+     * @param {Object} discount - Optional discount configuration
      */
-    async calculatePrice(config) {
+    async calculatePrice(config, discount = null) {
+        const requestBody = discount 
+            ? { config, discount }
+            : config;
+        
         const response = await fetch(`${API_BASE}/calculate-price`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(config)
+            body: JSON.stringify(requestBody)
         });
         const data = await response.json();
         if (data.success) {
@@ -166,5 +172,153 @@ window.API = {
             return data;
         }
         throw new Error(data.error || 'Failed to delete stone pricing');
+    },
+
+    /**
+     * Fetch all discount rules
+     */
+    async fetchDiscounts() {
+        const response = await fetch(`${API_BASE}/discounts`);
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        }
+        throw new Error(data.error || 'Failed to fetch discounts');
+    },
+
+    /**
+     * Create new unified discount (auto-applies)
+     */
+    async createDiscount(discountData) {
+        const response = await fetch(`${API_BASE}/discounts`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(discountData)
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to create discount');
+    },
+
+    /**
+     * Update unified discount (re-applies)
+     */
+    async updateDiscount(ruleId, discountData) {
+        const response = await fetch(`${API_BASE}/discounts/${ruleId}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(discountData)
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to update discount');
+    },
+
+    /**
+     * Delete discount rule
+     */
+    async deleteDiscount(ruleId) {
+        // URL encode the ruleId to handle GIDs with slashes
+        const encodedRuleId = encodeURIComponent(ruleId);
+        const response = await fetch(`${API_BASE}/discounts/${encodedRuleId}`, {
+            method: 'DELETE'
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to delete discount');
+    },
+
+    /**
+     * Apply discount to bulk selected products
+     */
+    async applyBulkDiscount(productIds, discountConfig) {
+        const response = await fetch(`${API_BASE}/discounts/apply-bulk`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ productIds, discountConfig })
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to apply bulk discount');
+    },
+
+    /**
+     * Apply discount to collection
+     */
+    async applyCollectionDiscount(collectionId, discountConfig) {
+        const response = await fetch(`${API_BASE}/discounts/apply-collection`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ collectionId, discountConfig })
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to apply collection discount');
+    },
+
+    /**
+     * Fetch Shopify collections
+     */
+    async fetchCollections() {
+        const response = await fetch(`${API_BASE}/discounts/collections`);
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        }
+        throw new Error(data.error || 'Failed to fetch collections');
+    },
+
+    /**
+     * Search products by SKU
+     */
+    async searchBySku(query) {
+        const response = await fetch(`${API_BASE}/products/search-by-sku?query=${encodeURIComponent(query)}`);
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        }
+        throw new Error(data.error || 'Failed to search by SKU');
+    },
+
+    /**
+     * Validate bulk SKUs
+     */
+    async validateBulkSkus(skus) {
+        const response = await fetch(`${API_BASE}/products/validate-skus`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ skus })
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        }
+        throw new Error(data.error || 'Failed to validate SKUs');
+    },
+
+    /**
+     * Resolve discount conflict
+     */
+    async resolveConflict(resolution) {
+        const response = await fetch(`${API_BASE}/discounts/resolve-conflict`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(resolution)
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to resolve conflict');
     }
 };

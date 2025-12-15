@@ -17,6 +17,18 @@ router.get('/', productsController.getProducts);
 router.get('/search', productsController.searchProducts);
 
 /**
+ * GET /api/products/search-by-sku?query=...
+ * Search products by SKU
+ */
+router.get('/search-by-sku', productsController.searchBySku);
+
+/**
+ * POST /api/products/validate-skus
+ * Validate bulk SKUs
+ */
+router.post('/validate-skus', productsController.validateBulkSkus);
+
+/**
  * GET /api/products/:id
  * Get specific product configuration
  */

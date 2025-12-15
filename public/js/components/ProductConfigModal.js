@@ -38,6 +38,55 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
     const [calculation, setCalculation] = useState(null);
     const [availableStones, setAvailableStones] = useState([]);
     const prevStonesKeyRef = useRef('');
+    const [showDiscountSection, setShowDiscountSection] = useState(false);
+    const [discount, setDiscount] = useState({
+        enabled: false,
+        discountValue: '',
+        weightSlabs: []
+    });
+    
+    // Load discount from product configuration if it exists
+    const [productDiscount, setProductDiscount] = useState(null);
+    const [isLoadingDiscount, setIsLoadingDiscount] = useState(false);
+    
+    useEffect(() => {
+        // First check if discount is already in product.configuration
+        if (product.configuration?.discount) {
+            try {
+                // Parse discount if it's a string, otherwise use as-is
+                const discountData = typeof product.configuration.discount === 'string'
+                    ? JSON.parse(product.configuration.discount)
+                    : product.configuration.discount;
+                
+                if (discountData && discountData.enabled) {
+                    setProductDiscount(discountData);
+                    return;
+                }
+            } catch (e) {
+                // Error parsing discount, continue to fetch
+            }
+        }
+        
+        // Always fetch full configuration to ensure we have the latest discount
+        // This is important because the product list might be cached
+        if (product.id) {
+            setIsLoadingDiscount(true);
+            const fetchFullConfig = async () => {
+                try {
+                    const API = window.API || {};
+                    const fullConfig = await API.fetchProductConfiguration(product.id);
+                    if (fullConfig.discount && fullConfig.discount.enabled) {
+                        setProductDiscount(fullConfig.discount);
+                    }
+                } catch (error) {
+                    console.error('Error fetching product configuration:', error);
+                } finally {
+                    setIsLoadingDiscount(false);
+                }
+            };
+            fetchFullConfig();
+        }
+    }, [product.id, product.configuration?.discount]);
 
     // Load available stones
     useEffect(() => {
@@ -108,11 +157,22 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         }
     };
 
+    // Recalculate price when discount is loaded
     useEffect(() => {
-        if (config.metalWeight && config.metalType) {
+        if (productDiscount && productDiscount.enabled && config.metalWeight && config.metalType) {
             calculatePricePreview();
         }
-    }, [config.metalWeight, config.metalType, config.makingChargePercent, config.labourType, config.labourValue, config.wastageType, config.wastageValue, config.taxPercent, config.stones.map(s => s.stoneCost).join(',')]);
+    }, [productDiscount]);
+    
+    useEffect(() => {
+        if (config.metalWeight && config.metalType) {
+            // Wait a bit for discount to load if it's being fetched
+            if (isLoadingDiscount) {
+                return;
+            }
+            calculatePricePreview();
+        }
+    }, [config.metalWeight, config.metalType, config.makingChargePercent, config.labourType, config.labourValue, config.wastageType, config.wastageValue, config.taxPercent, config.stones.map(s => s.stoneCost).join(','), isLoadingDiscount]);
 
     const calculatePricePreview = async () => {
         try {
@@ -128,7 +188,19 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                 stoneCost: totalStoneCost
             };
 
-            const priceBreakdown = await calculatePrice(configForAPI);
+            // Include product discount if it exists
+            // Convert product discount to discount config format if needed
+            let discountConfig = null;
+            if (productDiscount && productDiscount.enabled) {
+                // The discount from product metafield may need to be converted to the format expected by calculatePrice
+                // The discount metafield contains: enabled, discount_id, discount_title, applied_rule, discount_amount, applied_at
+                // But calculatePrice expects: enabled, goldRules/diamondRules/silverRules based on product type
+                // For now, we'll pass the discount as-is and let the backend handle it
+                // The backend will need to fetch the full discount rules from the discount_id
+                discountConfig = productDiscount;
+            }
+
+            const priceBreakdown = await calculatePrice(configForAPI, discountConfig);
             setCalculation(priceBreakdown);
         } catch (error) {
             console.error('Error calculating price:', error);
@@ -149,12 +221,16 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
             }
 
             // Normalize stones array - ensure all numeric fields are properly formatted
-            const normalizedStones = config.stones.map(stone => ({
-                stoneType: stone.stoneType || '',
-                stoneWeight: stone.stoneWeight === '' ? '0' : stone.stoneWeight,
-                stoneCost: stone.stoneCost === '' ? '0' : stone.stoneCost,
-                stoneCount: stone.stoneCount === undefined || stone.stoneCount === '' ? 1 : parseInt(stone.stoneCount) || 1
-            }));
+            const normalizedStones = config.stones.map(stone => {
+                const selectedStone = availableStones.find(s => s.stone_id === stone.stoneType);
+                return {
+                    stoneType: stone.stoneType || '', // stone_id
+                    actualStoneType: selectedStone?.stone_type || '', // actual type like "Diamond"
+                    stoneWeight: stone.stoneWeight === '' ? '0' : stone.stoneWeight,
+                    stoneCost: stone.stoneCost === '' ? '0' : stone.stoneCost,
+                    stoneCount: stone.stoneCount === undefined || stone.stoneCount === '' ? 1 : parseInt(stone.stoneCount) || 1
+                };
+            });
 
             // Normalize empty values to 0 for numeric fields before sending
             const configToSend = {
@@ -552,12 +628,105 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                 <span>Tax Amount ({config.taxPercent}%)</span>
                                 <span>₹{calculation.taxAmount.toFixed(2)}</span>
                             </div>
-                            <div className="calculation-row total">
+                            
+                            {/* Discount Information */}
+                            {calculation.discount && calculation.discount.discountAmount > 0 && (
+                                <>
+                                    <div className="calculation-row" style={{
+                                        borderTop: '1px solid #e0e0e0',
+                                        paddingTop: '8px',
+                                        marginTop: '4px'
+                                    }}>
+                                        <span style={{textDecoration: 'line-through', color: '#999'}}>Price Before Discount</span>
+                                        <span style={{textDecoration: 'line-through', color: '#999'}}>₹{calculation.finalPrice.toFixed(2)}</span>
+                                    </div>
+                                    <div className="calculation-row" style={{
+                                        color: '#28a745',
+                                        fontWeight: '500'
+                                    }}>
+                                        <span>
+                                            Discount Amount
+                                            {productDiscount?.discount_title && (
+                                                <span style={{fontSize: '12px', color: '#666', marginLeft: '8px'}}>
+                                                    ({productDiscount.discount_title})
+                                                </span>
+                                            )}
+                                        </span>
+                                        <span style={{color: '#28a745'}}>-₹{calculation.discount.discountAmount.toFixed(2)}</span>
+                                    </div>
+                                </>
+                            )}
+                            
+                            <div className="calculation-row total" style={{
+                                borderTop: calculation.discount && calculation.discount.discountAmount > 0 ? '2px solid #28a745' : '2px solid #333',
+                                paddingTop: '8px',
+                                marginTop: calculation.discount && calculation.discount.discountAmount > 0 ? '4px' : '0'
+                            }}>
                                 <span>Final Product Price</span>
-                                <span>₹{calculation.finalPrice.toFixed(2)}</span>
+                                <span style={{
+                                    color: calculation.discount && calculation.discount.discountAmount > 0 ? '#28a745' : 'inherit',
+                                    fontWeight: 'bold',
+                                    fontSize: calculation.discount && calculation.discount.discountAmount > 0 ? '18px' : 'inherit'
+                                }}>
+                                    ₹{(calculation.finalPriceAfterDiscount || calculation.finalPrice).toFixed(2)}
+                                </span>
                             </div>
                         </div>
                     )}
+
+                    {/* Discount Section */}
+                    <div style={{marginTop: '24px', borderTop: '1px solid #e0e0e0', paddingTop: '16px'}}>
+                        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px'}}>
+                            <h3 style={{margin: 0, fontSize: '16px'}}>Discount (Optional)</h3>
+                            <button 
+                                type="button"
+                                className="btn btn-secondary" 
+                                onClick={() => setShowDiscountSection(!showDiscountSection)}
+                                style={{padding: '6px 12px', fontSize: '14px'}}
+                            >
+                                {showDiscountSection ? 'Hide Discount' : 'Add Discount'}
+                            </button>
+                        </div>
+
+                        {showDiscountSection && (
+                            <div style={{padding: '16px', backgroundColor: '#f5f5f5', borderRadius: '8px'}}>
+                                <div style={{fontSize: '12px', color: '#666', marginBottom: '12px'}}>
+                                    Configure product-specific discount. Discounts are applied based on product type:
+                                    Gold (% on making), Diamond (₹ on stones), Silver (weight slabs).
+                                </div>
+
+                                <div className="form-group">
+                                    <label style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                                        <input
+                                            type="checkbox"
+                                            checked={discount.enabled}
+                                            onChange={(e) => setDiscount({...discount, enabled: e.target.checked})}
+                                            style={{cursor: 'pointer'}}
+                                        />
+                                        Enable Discount for this Product
+                                    </label>
+                                </div>
+
+                                {discount.enabled && (
+                                    <div>
+                                        <div className="form-group">
+                                            <label>Discount Value</label>
+                                            <input
+                                                type="number"
+                                                step="0.01"
+                                                value={discount.discountValue}
+                                                onChange={(e) => setDiscount({...discount, discountValue: e.target.value})}
+                                                placeholder="Enter discount amount/percentage"
+                                            />
+                                            <div style={{fontSize: '12px', color: '#666', marginTop: '4px'}}>
+                                                For bulk discount application, use the "Discounts" tab
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        )}
+                    </div>
                 </div>
 
                 <div style={{display: 'flex', justifyContent: 'flex-end', gap: '12px'}}>

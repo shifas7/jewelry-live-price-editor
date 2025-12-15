@@ -629,6 +629,10 @@ export class ShopifyAPI {
               value
             }
           }
+          discountMetafield: metafield(namespace: "pricing", key: "discount") {
+            id
+            value
+          }
         }
       }
     `;
@@ -683,6 +687,20 @@ export class ShopifyAPI {
     config.currentPrice = result.product.variants.nodes[0]?.price || '0';
     config.sku = this.getSkuFromVariants(result.product.variants);
 
+    // Parse discount metafield if it exists
+    if (result.product.discountMetafield?.value) {
+      try {
+        const discountValue = JSON.parse(result.product.discountMetafield.value);
+        // Only include discount if it's enabled
+        if (discountValue.enabled) {
+          config.discount = discountValue;
+        }
+      } catch (e) {
+        console.error('Error parsing discount metafield:', e);
+        // If parsing fails, don't include discount
+      }
+    }
+
     return config;
   }
 
@@ -719,6 +737,10 @@ export class ShopifyAPI {
                   value
                 }
               }
+              discountMetafield: metafield(namespace: "pricing", key: "discount") {
+                id
+                value
+              }
             }
           }
         }
@@ -747,6 +769,10 @@ export class ShopifyAPI {
                   key
                   value
                 }
+              }
+              discountMetafield: metafield(namespace: "pricing", key: "discount") {
+                id
+                value
               }
             }
           }
@@ -799,6 +825,19 @@ export class ShopifyAPI {
           config[field.key] = field.value;
         }
       });
+
+      // Parse discount metafield if it exists
+      if (product.discountMetafield?.value) {
+        try {
+          const discountValue = JSON.parse(product.discountMetafield.value);
+          // Only include discount if it's enabled
+          if (discountValue.enabled) {
+            config.discount = discountValue;
+          }
+        } catch (e) {
+          // If parsing fails, don't include discount
+        }
+      }
 
       return {
         id: product.id,
@@ -981,6 +1020,9 @@ export class ShopifyAPI {
           totalStoneCost = parseFloat(product.configuration.stone_cost) || 0;
         }
 
+        // Fetch stone pricing for accurate product type detection (if discount is applied later)
+        const stonePricing = await this.getAllStonePricing();
+        
         // Calculate new price
         const priceBreakdown = calculator.calculatePrice({
           metalWeight: product.configuration.metal_weight,
@@ -992,7 +1034,7 @@ export class ShopifyAPI {
           wastageValue: product.configuration.wastage_value,
           stoneCost: totalStoneCost,
           taxPercent: product.configuration.tax_percent
-        });
+        }, null, stonePricing);
 
         // Round final price up to nearest integer
         const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
@@ -1051,6 +1093,616 @@ export class ShopifyAPI {
     }
 
     return updates;
+  }
+
+  /**
+   * Create discount rule metaobject (old format - for backward compatibility)
+   */
+  async createDiscountRule(discountData) {
+    const mutation = `
+      mutation CreateDiscountRule($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) {
+          metaobject {
+            id
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const fields = [
+      { key: 'rule_name', value: discountData.ruleName },
+      { key: 'product_type', value: discountData.productType }, // gold, diamond, silver
+      { key: 'discount_type', value: discountData.discountType }, // percentage, fixed, slab
+      { key: 'discount_value', value: discountData.discountValue?.toString() || '0' },
+      { key: 'weight_slabs', value: JSON.stringify(discountData.weightSlabs || []) },
+      { key: 'is_active', value: discountData.isActive?.toString() || 'true' },
+      { key: 'created_at', value: new Date().toISOString() }
+    ];
+
+    return await this.graphql(mutation, {
+      metaobject: {
+        type: 'discount_rules',
+        fields
+      }
+    });
+  }
+
+  /**
+   * Create unified discount (new format with all 3 product types)
+   */
+  async createDiscount(discountData) {
+    const mutation = `
+      mutation CreateDiscount($metaobject: MetaobjectCreateInput!) {
+        metaobjectCreate(metaobject: $metaobject) {
+          metaobject {
+            id
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const fields = [
+      { key: 'discount_title', value: discountData.discount_title },
+      { key: 'application_type', value: discountData.application_type },
+      { key: 'target_collection_id', value: discountData.target_collection_id || '' },
+      { key: 'target_product_ids', value: JSON.stringify(discountData.target_product_ids || []) },
+      { key: 'gold_rules', value: JSON.stringify(discountData.gold_rules || {}) },
+      { key: 'diamond_rules', value: JSON.stringify(discountData.diamond_rules || {}) },
+      { key: 'silver_rules', value: JSON.stringify(discountData.silver_rules || {}) },
+      { key: 'is_active', value: (discountData.is_active !== undefined ? discountData.is_active : true).toString() },
+      { key: 'created_at', value: discountData.created_at || new Date().toISOString() },
+      { key: 'last_applied', value: discountData.last_applied || '' }
+    ];
+
+    return await this.graphql(mutation, {
+      metaobject: {
+        type: 'discount_rules',
+        fields
+      }
+    });
+  }
+
+  /**
+   * Update discount rule metaobject (old format - for backward compatibility)
+   */
+  async updateDiscountRule(ruleId, discountData) {
+    const mutation = `
+      mutation UpdateDiscountRule($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+        metaobjectUpdate(id: $id, metaobject: $metaobject) {
+          metaobject {
+            id
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const fields = [
+      { key: 'rule_name', value: discountData.ruleName },
+      { key: 'product_type', value: discountData.productType },
+      { key: 'discount_type', value: discountData.discountType },
+      { key: 'discount_value', value: discountData.discountValue?.toString() || '0' },
+      { key: 'weight_slabs', value: JSON.stringify(discountData.weightSlabs || []) },
+      { key: 'is_active', value: discountData.isActive?.toString() || 'true' }
+    ];
+
+    return await this.graphql(mutation, {
+      id: ruleId,
+      metaobject: {
+        fields
+      }
+    });
+  }
+
+  /**
+   * Update unified discount (new format)
+   */
+  async updateDiscount(ruleId, discountData) {
+    const mutation = `
+      mutation UpdateDiscount($id: ID!, $metaobject: MetaobjectUpdateInput!) {
+        metaobjectUpdate(id: $id, metaobject: $metaobject) {
+          metaobject {
+            id
+            handle
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const fields = [
+      { key: 'discount_title', value: discountData.discount_title },
+      { key: 'application_type', value: discountData.application_type },
+      { key: 'target_collection_id', value: discountData.target_collection_id || '' },
+      { key: 'target_product_ids', value: JSON.stringify(discountData.target_product_ids || []) },
+      { key: 'gold_rules', value: JSON.stringify(discountData.gold_rules || {}) },
+      { key: 'diamond_rules', value: JSON.stringify(discountData.diamond_rules || {}) },
+      { key: 'silver_rules', value: JSON.stringify(discountData.silver_rules || {}) },
+      { key: 'is_active', value: (discountData.is_active !== undefined ? discountData.is_active : true).toString() },
+      { key: 'last_applied', value: discountData.last_applied || '' }
+    ];
+
+    return await this.graphql(mutation, {
+      id: ruleId,
+      metaobject: {
+        fields
+      }
+    });
+  }
+
+  /**
+   * Get single discount rule by ID
+   */
+  async getDiscountRule(ruleId) {
+    const query = `
+      query GetDiscountRule($id: ID!) {
+        metaobject(id: $id) {
+          id
+          handle
+          fields {
+            key
+            value
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query, { id: ruleId });
+    
+    if (!result.metaobject) {
+      return null;
+    }
+
+    const rule = { id: result.metaobject.id, handle: result.metaobject.handle };
+    result.metaobject.fields.forEach(field => {
+      if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+        try {
+          rule[field.key] = JSON.parse(field.value || '[]');
+        } catch {
+          rule[field.key] = field.value ? JSON.parse(field.value) : (field.key === 'target_product_ids' ? [] : {});
+        }
+      } else if (field.key === 'is_active') {
+        rule[field.key] = field.value === 'true';
+      } else {
+        rule[field.key] = field.value;
+      }
+    });
+
+    return rule;
+  }
+
+  /**
+   * Get all discount rules (supports both old and new format)
+   */
+  async getDiscountRules() {
+    const query = `
+      query GetDiscountRules {
+        metaobjects(type: "discount_rules", first: 50) {
+          nodes {
+            id
+            handle
+            fields {
+              key
+              value
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query);
+    
+    if (!result.metaobjects || !result.metaobjects.nodes) {
+      return [];
+    }
+
+    return result.metaobjects.nodes.map(node => {
+      const rule = { id: node.id, handle: node.handle };
+      node.fields.forEach(field => {
+        // JSON fields
+        if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+          try {
+            rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+          } catch {
+            rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+          }
+        } 
+        // Boolean fields
+        else if (field.key === 'is_active') {
+          rule[field.key] = field.value === 'true';
+        } 
+        // Numeric fields
+        else if (field.key === 'discount_value') {
+          rule[field.key] = parseFloat(field.value) || 0;
+        } 
+        // String fields
+        else {
+          rule[field.key] = field.value;
+        }
+      });
+      return rule;
+    });
+  }
+
+  /**
+   * Get a single discount rule by ID
+   */
+  async getDiscountRuleById(discountId) {
+    const query = `
+      query GetDiscountRule($id: ID!) {
+        metaobject(id: $id) {
+          id
+          handle
+          fields {
+            key
+            value
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query, { id: discountId });
+    
+    if (!result.metaobject) {
+      return null;
+    }
+
+    const rule = { id: result.metaobject.id, handle: result.metaobject.handle };
+    result.metaobject.fields.forEach(field => {
+      // JSON fields
+      if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+        try {
+          rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+        } catch {
+          rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+        }
+      } 
+      // Boolean fields
+      else if (field.key === 'is_active') {
+        rule[field.key] = field.value === 'true';
+      } 
+      // Numeric fields
+      else if (field.key === 'discount_value') {
+        rule[field.key] = parseFloat(field.value) || 0;
+      } 
+      // String fields
+      else {
+        rule[field.key] = field.value;
+      }
+    });
+    
+    return rule;
+  }
+
+  /**
+   * Delete discount rule
+   */
+  async deleteDiscountRule(ruleId) {
+    const mutation = `
+      mutation DeleteDiscountRule($id: ID!) {
+        metaobjectDelete(id: $id) {
+          deletedId
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    return await this.graphql(mutation, { id: ruleId });
+  }
+
+  /**
+   * Update product's discount metafield
+   */
+  async updateProductDiscount(productId, discountConfig) {
+    const mutation = `
+      mutation UpdateProductDiscount($metafields: [MetafieldsSetInput!]!) {
+        metafieldsSet(metafields: $metafields) {
+          metafields {
+            id
+            namespace
+            key
+            value
+          }
+          userErrors {
+            field
+            message
+          }
+        }
+      }
+    `;
+
+    const metafields = [
+      {
+        ownerId: productId,
+        namespace: 'pricing',
+        key: 'discount',
+        type: 'json',
+        value: JSON.stringify(discountConfig)
+      }
+    ];
+
+    return await this.graphql(mutation, { metafields });
+  }
+
+  /**
+   * Get Shopify collections
+   */
+  async getCollections(first = 50) {
+    const query = `
+      query GetCollections($first: Int!) {
+        collections(first: $first) {
+          edges {
+            node {
+              id
+              title
+              handle
+              productsCount {
+                count
+              }
+            }
+          }
+          pageInfo {
+            hasNextPage
+            endCursor
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query, { first });
+    
+    return {
+      collections: result.collections.edges.map(edge => ({
+        ...edge.node,
+        productsCount: edge.node.productsCount?.count || 0
+      })),
+      pageInfo: result.collections.pageInfo
+    };
+  }
+
+  /**
+   * Get products in a collection
+   */
+  async getCollectionProducts(collectionId, first = 50) {
+    const query = `
+      query GetCollectionProducts($id: ID!, $first: Int!) {
+        collection(id: $id) {
+          id
+          title
+          products(first: $first) {
+            edges {
+              node {
+                id
+                title
+                status
+                vendor
+                variants(first: 1) {
+                  edges {
+                    node {
+                      id
+                      price
+                      sku
+                    }
+                  }
+                }
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query, { id: collectionId, first });
+    
+    if (!result.collection) {
+      return { products: [], pageInfo: {} };
+    }
+
+    const products = result.collection.products.edges.map(edge => {
+      const product = edge.node;
+      const variant = product.variants.edges[0]?.node;
+      
+      return {
+        id: product.id,
+        title: product.title,
+        status: product.status,
+        vendor: product.vendor,
+        variantId: variant?.id,
+        price: variant?.price,
+        sku: variant?.sku
+      };
+    });
+
+    return {
+      products,
+      pageInfo: result.collection.products.pageInfo
+    };
+  }
+
+  /**
+   * Bulk apply discount to multiple products
+   */
+  async bulkApplyDiscount(productIds, discountConfig, priceCalculator) {
+    const results = [];
+
+    for (const productId of productIds) {
+      try {
+        // Get product configuration
+        const config = await this.getProductConfiguration(productId);
+        
+        if (!config.configured) {
+          results.push({
+            productId,
+            success: false,
+            error: 'Product not configured'
+          });
+          continue;
+        }
+
+        // Update discount metafield
+        await this.updateProductDiscount(productId, discountConfig);
+
+        // Fetch stone pricing for accurate product type detection
+        const stonePricing = await this.getAllStonePricing();
+
+        // Recalculate price with discount
+        const priceBreakdown = priceCalculator.calculatePrice(config, discountConfig, stonePricing);
+        const roundedPrice = Math.ceil(priceBreakdown.finalPriceAfterDiscount || priceBreakdown.finalPrice);
+
+        // Update product price
+        if (config.variantId) {
+          await this.updateProductPrice(productId, config.variantId, roundedPrice);
+        }
+
+        results.push({
+          productId,
+          success: true,
+          newPrice: roundedPrice,
+          discountAmount: priceBreakdown.discount?.discountAmount || 0
+        });
+      } catch (error) {
+        results.push({
+          productId,
+          success: false,
+          error: error.message
+        });
+      }
+    }
+
+    return results;
+  }
+
+  /**
+   * Search products by SKU
+   * @param {string} query - SKU search query
+   * @returns {Promise<Array>} - Array of matching products
+   */
+  async searchProductsBySku(query) {
+    const graphqlQuery = `
+      query SearchBySku($query: String!) {
+        products(first: 50, query: $query) {
+          edges {
+            node {
+              id
+              title
+              status
+              vendor
+              variants(first: 10) {
+                edges {
+                  node {
+                    id
+                    sku
+                    price
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(graphqlQuery, { query: `sku:${query}*` });
+    
+    // Flatten products with their variants
+    const products = [];
+    result.products.edges.forEach(edge => {
+      const product = edge.node;
+      product.variants.edges.forEach(variantEdge => {
+        const variant = variantEdge.node;
+        if (variant.sku && variant.sku.toLowerCase().includes(query.toLowerCase())) {
+          products.push({
+            id: product.id,
+            title: product.title,
+            status: product.status,
+            vendor: product.vendor,
+            variantId: variant.id,
+            sku: variant.sku,
+            price: variant.price
+          });
+        }
+      });
+    });
+
+    return products;
+  }
+
+  /**
+   * Find product by exact SKU
+   * @param {string} sku - Exact SKU to find
+   * @returns {Promise<Object|null>} - Product object or null if not found
+   */
+  async findProductBySku(sku) {
+    const products = await this.searchProductsBySku(sku);
+    return products.find(p => p.sku === sku) || null;
+  }
+
+  /**
+   * Get product by ID (for application engine)
+   * @param {string} productId - Product ID
+   * @returns {Promise<Object>} - Product object
+   */
+  async getProduct(productId) {
+    const query = `
+      query GetProduct($id: ID!) {
+        product(id: $id) {
+          id
+          title
+          status
+          vendor
+          variants(first: 1) {
+            edges {
+              node {
+                id
+                sku
+                price
+              }
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql(query, { id: productId });
+    
+    if (!result.product) {
+      return null;
+    }
+
+    const variant = result.product.variants.edges[0]?.node;
+    
+    return {
+      id: result.product.id,
+      title: result.product.title,
+      status: result.product.status,
+      vendor: result.product.vendor,
+      sku: variant?.sku,
+      price: variant?.price
+    };
   }
 }
 

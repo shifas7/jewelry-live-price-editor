@@ -23,12 +23,16 @@ function App() {
     const [stonePrices, setStonePrices] = useState([]);
     const [showStoneModal, setShowStoneModal] = useState(false);
     const [selectedStone, setSelectedStone] = useState(null);
+    const [discounts, setDiscounts] = useState([]);
+    const [collections, setCollections] = useState([]);
 
     // Load metal prices on mount
     useEffect(() => {
         loadMetalPrices();
         loadProducts();
         loadStonePrices();
+        loadDiscounts();
+        loadCollections();
     }, []);
 
     const loadMetalPrices = async () => {
@@ -87,6 +91,24 @@ function App() {
             setStonePrices(stones);
         } catch (error) {
             console.error('Error loading stone prices:', error);
+        }
+    };
+
+    const loadDiscounts = async () => {
+        try {
+            const discountRules = await API.fetchDiscounts();
+            setDiscounts(discountRules);
+        } catch (error) {
+            console.error('Error loading discounts:', error);
+        }
+    };
+
+    const loadCollections = async () => {
+        try {
+            const collectionsList = await API.fetchCollections();
+            setCollections(collectionsList);
+        } catch (error) {
+            console.error('Error loading collections:', error);
         }
     };
 
@@ -154,6 +176,12 @@ function App() {
                     Products
                 </button>
                 <button 
+                    className={`tab ${activeTab === 'discounts' ? 'active' : ''}`}
+                    onClick={() => setActiveTab('discounts')}
+                >
+                    Discounts
+                </button>
+                <button 
                     className={`tab ${activeTab === 'settings' ? 'active' : ''}`}
                     onClick={() => setActiveTab('settings')}
                 >
@@ -187,6 +215,15 @@ function App() {
                     onNextPage={handleNextPage}
                     onPrevPage={handlePrevPage}
                     onRefresh={handleRefreshProducts}
+                />
+            )}
+
+            {activeTab === 'discounts' && (
+                <window.DiscountsTab
+                    discounts={discounts}
+                    loading={loading}
+                    onRefresh={loadDiscounts}
+                    collections={collections}
                 />
             )}
 

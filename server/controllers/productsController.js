@@ -84,7 +84,8 @@ export async function configureProduct(req, res) {
     
     if (config.stones && Array.isArray(config.stones)) {
       stones = config.stones.map(stone => ({
-        stoneType: stone.stoneType || '',
+        stoneType: stone.stoneType || '', // stone_id
+        actualStoneType: stone.actualStoneType || '', // actual type
         stoneWeight: normalizeNumeric(stone.stoneWeight),
         stoneCost: normalizeNumeric(stone.stoneCost),
         stoneCount: parseInt(stone.stoneCount) || 1
@@ -92,6 +93,17 @@ export async function configureProduct(req, res) {
       
       // Calculate total stone cost from all stones
       totalStoneCost = stones.reduce((sum, stone) => sum + stone.stoneCost, 0);
+    }
+
+    // Process discount configuration if provided
+    let discountConfig = null;
+    if (config.discount && config.discount.enabled) {
+      discountConfig = {
+        enabled: true,
+        discountType: config.discount.discountType || 'percentage',
+        discountValue: normalizeNumeric(config.discount.discountValue),
+        weightSlabs: config.discount.weightSlabs || []
+      };
     }
 
     // Normalize all numeric fields to default to 0 if empty
@@ -110,11 +122,15 @@ export async function configureProduct(req, res) {
       taxPercent: normalizeNumeric(config.taxPercent) || 3 // Default tax to 3% if not provided
     };
 
-    // Calculate price with current rates
-    const priceBreakdown = priceCalculator.calculatePrice(normalizedConfig);
+    // Fetch stone pricing for accurate product type detection
+    const stonePricing = await shopifyAPI.getAllStonePricing();
+    
+    // Calculate price with current rates (including discount if provided)
+    const priceBreakdown = priceCalculator.calculatePrice(normalizedConfig, discountConfig, stonePricing);
 
     console.log('Saving configuration for product:', productId);
     console.log('Configuration:', normalizedConfig);
+    console.log('Discount:', discountConfig);
     console.log('Price breakdown:', priceBreakdown);
 
     // Add calculated values to config for metafields
@@ -126,6 +142,7 @@ export async function configureProduct(req, res) {
       labourCharge: priceBreakdown.labourCharge || 0,
       wastageCharge: priceBreakdown.wastageCharge || 0,
       taxAmount: priceBreakdown.taxAmount || 0,
+      discount: discountConfig,
       productCode: config.productCode || productId.split('/').pop() // Use product ID as code if not provided
     };
 
@@ -140,7 +157,9 @@ export async function configureProduct(req, res) {
     try {
       const productConfig = await shopifyAPI.getProductConfiguration(productId);
       if (productConfig.variantId) {
-        const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
+        // Use final price after discount if discount is applied
+        const finalPrice = priceBreakdown.finalPriceAfterDiscount || priceBreakdown.finalPrice;
+        const roundedPrice = Math.ceil(finalPrice);
         await shopifyAPI.updateProductPrice(productId, productConfig.variantId, roundedPrice);
         console.log('Variant price updated successfully to:', roundedPrice);
         priceUpdateSuccess = true;
@@ -197,7 +216,11 @@ export async function configureProduct(req, res) {
  */
 export async function calculatePrice(req, res) {
   try {
-    const config = req.body;
+    const { config: configParam, discount: discountParam, ...rest } = req.body;
+    // Support both { config, discount } and flat structure
+    const config = configParam || rest;
+    const discountConfig = discountParam || null;
+    
     const priceCalculator = getPriceCalculator();
     
     // If stones array is provided, calculate total stone cost
@@ -215,7 +238,99 @@ export async function calculatePrice(req, res) {
       stoneCost: stoneCost
     };
     
-    const priceBreakdown = priceCalculator.calculatePrice(configForCalculator);
+    // Use discount from parameter, or try to extract from config if it has discount structure
+    let finalDiscountConfig = discountConfig;
+    
+    // If discountConfig is provided and has discount_id, fetch full discount rules
+    if (finalDiscountConfig && finalDiscountConfig.enabled && finalDiscountConfig.discount_id) {
+      const shopifyAPI = getShopifyAPI();
+      try {
+        // Fetch the full discount rules from discount_id
+        const discountRules = await shopifyAPI.getDiscountRuleById(finalDiscountConfig.discount_id);
+        if (discountRules) {
+          // Convert discount rules to discount config format based on applied_rule
+          const appliedRule = finalDiscountConfig.applied_rule || 'gold';
+          if (appliedRule === 'gold' && discountRules.gold_rules) {
+            finalDiscountConfig = {
+              enabled: true,
+              goldRules: discountRules.gold_rules
+            };
+          } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+            finalDiscountConfig = {
+              enabled: true,
+              diamondRules: discountRules.diamond_rules
+            };
+          } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+            finalDiscountConfig = {
+              enabled: true,
+              silverRules: discountRules.silver_rules
+            };
+          }
+        }
+      } catch (error) {
+        console.error('Error fetching discount rules:', error);
+        // If fetching fails, we'll calculate without discount but still show stored discount_amount
+      }
+    }
+    
+    // Fallback: If no discountConfig but config has discount, use that
+    if (!finalDiscountConfig && config.discount && config.discount.enabled) {
+      // If discount is in config, check if it has discount_id (stored discount)
+      if (config.discount.discount_id) {
+        const shopifyAPI = getShopifyAPI();
+        try {
+          // Fetch the full discount rules from discount_id
+          const discountRules = await shopifyAPI.getDiscountRuleById(config.discount.discount_id);
+          if (discountRules) {
+            // Convert discount rules to discount config format based on applied_rule
+            const appliedRule = config.discount.applied_rule || 'gold';
+            if (appliedRule === 'gold' && discountRules.gold_rules) {
+              finalDiscountConfig = {
+                enabled: true,
+                goldRules: discountRules.gold_rules
+              };
+            } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+              finalDiscountConfig = {
+                enabled: true,
+                diamondRules: discountRules.diamond_rules
+              };
+            } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+              finalDiscountConfig = {
+                enabled: true,
+                silverRules: discountRules.silver_rules
+              };
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching discount rules:', error);
+          // If fetching fails, we'll calculate without discount but still show stored discount_amount
+        }
+      } else {
+        // If no discount_id, use discount as-is (might be a direct discount config)
+        finalDiscountConfig = config.discount;
+      }
+    }
+    
+    // Fetch stone pricing for accurate product type detection
+    const shopifyAPI = getShopifyAPI();
+    const stonePricing = await shopifyAPI.getAllStonePricing();
+    
+    const priceBreakdown = priceCalculator.calculatePrice(configForCalculator, finalDiscountConfig, stonePricing);
+    
+    // If we have stored discount_amount but couldn't recalculate, use stored amount for display
+    // Check both discountConfig and config.discount for stored discount info
+    const storedDiscount = discountConfig || config.discount;
+    
+    if (storedDiscount && storedDiscount.discount_amount && !priceBreakdown.discount) {
+      priceBreakdown.discount = {
+        discountAmount: parseFloat(storedDiscount.discount_amount) || 0,
+        discountTitle: storedDiscount.discount_title || 'Discount',
+        discountType: 'stored',
+        discountAppliedOn: storedDiscount.applied_rule || 'unknown'
+      };
+      // Calculate final price after discount
+      priceBreakdown.finalPriceAfterDiscount = priceBreakdown.finalPrice - priceBreakdown.discount.discountAmount;
+    }
 
     res.json({
       success: true,
@@ -253,6 +368,82 @@ export async function searchProducts(req, res) {
     res.json({
       success: true,
       data: products
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Search products by SKU
+ */
+export async function searchBySku(req, res) {
+  try {
+    const { query } = req.query;
+    if (!query || query.trim() === '') {
+      return res.status(400).json({
+        success: false,
+        error: 'SKU search query is required'
+      });
+    }
+
+    const shopifyAPI = getShopifyAPI();
+    const products = await shopifyAPI.searchProductsBySku(query.trim());
+    
+    res.json({
+      success: true,
+      data: products
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Validate bulk SKUs
+ */
+export async function validateBulkSkus(req, res) {
+  try {
+    const { skus } = req.body;
+    
+    if (!skus || !Array.isArray(skus) || skus.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'SKUs array is required'
+      });
+    }
+
+    const shopifyAPI = getShopifyAPI();
+    
+    // Find products for each SKU
+    const results = await Promise.all(
+      skus.map(async (sku) => {
+        const trimmedSku = sku.trim();
+        if (!trimmedSku) return { sku: trimmedSku, product: null };
+        
+        const product = await shopifyAPI.findProductBySku(trimmedSku);
+        return { sku: trimmedSku, product };
+      })
+    );
+
+    const valid = results.filter(r => r.product !== null).map(r => r.product);
+    const invalid = results.filter(r => r.product === null).map(r => r.sku);
+
+    res.json({
+      success: true,
+      data: {
+        valid,
+        invalid,
+        total: skus.length,
+        validCount: valid.length,
+        invalidCount: invalid.length
+      }
     });
   } catch (error) {
     res.status(500).json({

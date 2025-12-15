@@ -3,17 +3,22 @@
  * Based on the calculation details provided
  */
 
+import { DiscountCalculator } from './discountCalculator.js';
+
 export class PriceCalculator {
   constructor(metalRates) {
     this.metalRates = metalRates; // Object with gold24kt, gold22kt, gold18kt, gold14kt, platinum, silver
+    this.discountCalculator = new DiscountCalculator();
   }
 
   /**
    * Calculate complete product pricing
    * @param {Object} config - Product configuration
+   * @param {Object} discountConfig - Optional discount configuration
+   * @param {Array} stonePricing - Optional array of stone pricing objects for accurate product type detection
    * @returns {Object} Detailed price breakdown
    */
-  calculatePrice(config) {
+  calculatePrice(config, discountConfig = null, stonePricing = null) {
     const {
       metalWeight,        // in grams
       metalType,          // 'gold24kt', 'gold22kt', 'gold18kt', 'gold14kt', 'platinum', 'silver'
@@ -24,7 +29,8 @@ export class PriceCalculator {
       wastageValue,
       stoneCost,          // total stone cost in INR
       taxPercent,         // GST/VAT percentage
-      serviceChargePercent = 0 // optional service charge
+      serviceChargePercent = 0, // optional service charge
+      stones = []         // array of stones for discount calculation
     } = config;
 
     // Convert to numbers and handle empty values
@@ -65,6 +71,9 @@ export class PriceCalculator {
 
     // 5. Service Charge (Making + Labour + Wastage)
     const serviceCharge = makingCharge + labourCharge + wastageCharge;
+    
+    // Effective Making Charge for Gold discount calculation = Making + Labour + Wastage
+    const effectiveMakingCharge = serviceCharge;
 
     // 6. Subtotal (before tax)
     const subtotal = metalCost + makingCharge + labourCharge + wastageCharge + stone;
@@ -75,13 +84,14 @@ export class PriceCalculator {
     // 8. Final Product Price
     const finalPrice = subtotal + taxAmount;
 
-    return {
+    const priceBreakdown = {
       metalRate: metalRate,
       metalCost: this.roundPrice(metalCost),
       makingCharge: this.roundPrice(makingCharge),
       labourCharge: this.roundPrice(labourCharge),
       wastageCharge: this.roundPrice(wastageCharge),
       serviceCharge: this.roundPrice(serviceCharge),
+      effectiveMakingCharge: this.roundPrice(effectiveMakingCharge), // For gold discount calculation
       stoneCost: this.roundPrice(stone),
       subtotal: this.roundPrice(subtotal),
       taxAmount: this.roundPrice(taxAmount),
@@ -95,9 +105,30 @@ export class PriceCalculator {
         labourValue: labourVal,
         wastageType,
         wastageValue: wastageVal,
-        taxPercent: tax
+        taxPercent: tax,
+        note: 'Making Charge for discount = Making + Labour + Wastage'
       }
     };
+
+    // Calculate discount if provided
+    if (discountConfig) {
+      const discountResult = this.discountCalculator.calculateDiscount(
+        priceBreakdown,
+        { metalType, stones, metalWeight: weight },
+        discountConfig,
+        stonePricing
+      );
+
+      priceBreakdown.discount = {
+        discountAmount: discountResult.discountAmount,
+        discountType: discountResult.discountType,
+        discountAppliedOn: discountResult.discountAppliedOn,
+        productType: discountResult.productType
+      };
+      priceBreakdown.finalPriceAfterDiscount = discountResult.finalPriceAfterDiscount;
+    }
+
+    return priceBreakdown;
   }
 
   /**

@@ -5,6 +5,8 @@ import metalPricesRoutes from './routes/metalPrices.js';
 import stonePricesRoutes from './routes/stonePrices.js';
 import productsRoutes from './routes/products.js';
 import utilsRoutes from './routes/utils.js';
+import discountsRoutes from './routes/discounts.js';
+import * as webhookHandlers from './webhooks/collectionSync.js';
 
 // Create Express app
 const app = createApp();
@@ -14,7 +16,14 @@ const PORT = getPort();
 app.use('/api/metal-prices', metalPricesRoutes);
 app.use('/api/stone-prices', stonePricesRoutes);
 app.use('/api/products', productsRoutes);
+app.use('/api/discounts', discountsRoutes);
 app.use('/api', utilsRoutes);
+
+// Webhook routes (before error handler)
+app.get('/webhooks/collections/update', webhookHandlers.verifyWebhook);
+app.post('/webhooks/collections/update', webhookHandlers.handleCollectionUpdate);
+app.get('/webhooks/products/delete', webhookHandlers.verifyWebhook);
+app.post('/webhooks/products/delete', webhookHandlers.handleProductDelete);
 
 // Error handling middleware (must be last)
 app.use(errorHandler);
