@@ -485,6 +485,34 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: 'jewelry_config',
+        key: 'subtotal',
+        value: normalizeNumericValue(config.subtotal),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'discounted_subtotal',
+        value: normalizeNumericValue(config.discountedSubtotal || config.subtotal),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'price_before_discount',
+        value: normalizeNumericValue(config.priceBeforeDiscount || config.finalPrice),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'tax_amount_before_discount',
+        value: normalizeNumericValue(config.taxAmountBeforeDiscount || config.taxAmount),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
         key: 'product_code',
         value: normalizeTextValue(config.productCode, ''),
         type: 'single_line_text_field'
@@ -592,6 +620,34 @@ export class ShopifyAPI {
         namespace: 'jewelry_config',
         key: 'tax_amount',
         value: normalizeNumericValue(priceBreakdown.taxAmount),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'subtotal',
+        value: normalizeNumericValue(priceBreakdown.subtotal),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'discounted_subtotal',
+        value: normalizeNumericValue(priceBreakdown.discountedSubtotal || priceBreakdown.subtotal),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'price_before_discount',
+        value: normalizeNumericValue(priceBreakdown.priceBeforeDiscount || priceBreakdown.finalPrice),
+        type: 'number_decimal'
+      },
+      {
+        ownerId: productId,
+        namespace: 'jewelry_config',
+        key: 'tax_amount_before_discount',
+        value: normalizeNumericValue(priceBreakdown.taxAmountBeforeDiscount || priceBreakdown.taxAmount),
         type: 'number_decimal'
       }
     ];

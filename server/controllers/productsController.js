@@ -191,6 +191,10 @@ export async function configureProduct(req, res) {
       labourCharge: priceBreakdown.labourCharge || 0,
       wastageCharge: priceBreakdown.wastageCharge || 0,
       taxAmount: priceBreakdown.taxAmount || 0,
+      subtotal: priceBreakdown.subtotal || 0,
+      discountedSubtotal: priceBreakdown.discountedSubtotal || priceBreakdown.subtotal || 0,
+      priceBeforeDiscount: priceBreakdown.priceBeforeDiscount || priceBreakdown.finalPrice || 0,
+      taxAmountBeforeDiscount: priceBreakdown.taxAmountBeforeDiscount || priceBreakdown.taxAmount || 0,
       discount: discountToSave, // Save original discount with discount_id, not processed discountConfig
       productCode: config.productCode || productId.split('/').pop() // Use product ID as code if not provided
     };

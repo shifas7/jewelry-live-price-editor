@@ -361,6 +361,14 @@ export class DiscountApplicationEngine {
 
       await this.shopifyAPI.updateProductDiscount(productId, discountMetafield);
 
+      // Update product price metafields (subtotal, discounted_subtotal, price_before_discount, etc.)
+      try {
+        await this.shopifyAPI.updateProductPriceMetafields(productId, priceBreakdown);
+      } catch (metafieldError) {
+        console.warn(`Failed to update price metafields for product ${productId}:`, metafieldError.message);
+        // Continue with price update even if metafield update fails
+      }
+
       // Update product price
       if (config.variantId) {
         await this.shopifyAPI.updateProductPrice(productId, config.variantId, roundedPrice);
@@ -501,6 +509,14 @@ export class DiscountApplicationEngine {
           
           // Validate price breakdown
           if (priceBreakdown && priceBreakdown.finalPrice && priceBreakdown.finalPrice > 0) {
+            // Update product price metafields (subtotal, discounted_subtotal, price_before_discount, etc.)
+            try {
+              await this.shopifyAPI.updateProductPriceMetafields(productId, priceBreakdown);
+            } catch (metafieldError) {
+              console.warn(`Failed to update price metafields for product ${productId}:`, metafieldError.message);
+              // Continue with price update even if metafield update fails
+            }
+            
             const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
             await this.shopifyAPI.updateProductPrice(productId, config.variantId, roundedPrice);
           } else {
