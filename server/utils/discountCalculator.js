@@ -82,7 +82,6 @@ export class DiscountCalculator {
         discountAmount: 0,
         discountType: null,
         discountAppliedOn: null,
-        finalPriceAfterDiscount: priceBreakdown.finalPrice,
         productType: this.detectProductType(config)
       };
     }
@@ -134,13 +133,10 @@ export class DiscountCalculator {
         discountAmount = 0;
     }
 
-    const finalPriceAfterDiscount = Math.max(0, priceBreakdown.finalPrice - discountAmount);
-
     return {
       discountAmount: this.roundPrice(discountAmount),
       discountType,
       discountAppliedOn,
-      finalPriceAfterDiscount: this.roundPrice(finalPriceAfterDiscount),
       productType
     };
   }

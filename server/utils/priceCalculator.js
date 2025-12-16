@@ -29,7 +29,6 @@ export class PriceCalculator {
       wastageValue,
       stoneCost,          // total stone cost in INR
       taxPercent,         // GST/VAT percentage
-      serviceChargePercent = 0, // optional service charge
       stones = []         // array of stones for discount calculation
     } = config;
 
@@ -78,13 +77,8 @@ export class PriceCalculator {
     // 6. Subtotal (before tax)
     const subtotal = metalCost + makingCharge + labourCharge + wastageCharge + stone;
 
-    // 7. Tax Amount
-    const taxAmount = subtotal * (tax / 100);
-
-    // 8. Final Product Price
-    const finalPrice = subtotal + taxAmount;
-
-    const priceBreakdown = {
+    // Build initial price breakdown for discount calculation
+    const initialPriceBreakdown = {
       metalRate: metalRate,
       metalCost: this.roundPrice(metalCost),
       makingCharge: this.roundPrice(makingCharge),
@@ -94,8 +88,6 @@ export class PriceCalculator {
       effectiveMakingCharge: this.roundPrice(effectiveMakingCharge), // For gold discount calculation
       stoneCost: this.roundPrice(stone),
       subtotal: this.roundPrice(subtotal),
-      taxAmount: this.roundPrice(taxAmount),
-      finalPrice: this.roundPrice(finalPrice),
       breakdown: {
         metalWeight: weight,
         metalType,
@@ -110,22 +102,53 @@ export class PriceCalculator {
       }
     };
 
-    // Calculate discount if provided
+    // 7. Calculate tax on original subtotal (before discount) - for "Price Before Discount" display
+    const taxAmountBeforeDiscount = subtotal * (tax / 100);
+    const priceBeforeDiscount = subtotal + taxAmountBeforeDiscount;
+
+    // 8. Calculate discount amount (if discountConfig provided) - BEFORE tax calculation
+    let discountAmount = 0;
+    let discountDetails = null;
     if (discountConfig) {
       const discountResult = this.discountCalculator.calculateDiscount(
-        priceBreakdown,
+        initialPriceBreakdown,
         { metalType, stones, metalWeight: weight },
         discountConfig,
         stonePricing
       );
+      discountAmount = discountResult.discountAmount || 0;
+      discountDetails = discountResult;
+    }
 
+    // 9. Apply discount to subtotal
+    const discountedSubtotal = Math.max(0, subtotal - discountAmount);
+
+    // 10. Calculate tax on discounted subtotal
+    const taxAmount = discountedSubtotal * (tax / 100);
+
+    // 11. Calculate final price (discounted subtotal + tax)
+    const finalPrice = discountedSubtotal + taxAmount;
+
+    // Build final price breakdown
+    const priceBreakdown = {
+      ...initialPriceBreakdown,
+      subtotal: this.roundPrice(subtotal),
+      taxAmountBeforeDiscount: this.roundPrice(taxAmountBeforeDiscount),
+      priceBeforeDiscount: this.roundPrice(priceBeforeDiscount),
+      discountedSubtotal: this.roundPrice(discountedSubtotal),
+      taxAmount: this.roundPrice(taxAmount),
+      finalPrice: this.roundPrice(finalPrice),
+      finalPriceAfterDiscount: this.roundPrice(finalPrice) // Same as finalPrice when discount is applied
+    };
+
+    // Add discount details if discount was applied
+    if (discountDetails) {
       priceBreakdown.discount = {
-        discountAmount: discountResult.discountAmount,
-        discountType: discountResult.discountType,
-        discountAppliedOn: discountResult.discountAppliedOn,
-        productType: discountResult.productType
+        discountAmount: discountDetails.discountAmount,
+        discountType: discountDetails.discountType,
+        discountAppliedOn: discountDetails.discountAppliedOn,
+        productType: discountDetails.productType
       };
-      priceBreakdown.finalPriceAfterDiscount = discountResult.finalPriceAfterDiscount;
     }
 
     return priceBreakdown;

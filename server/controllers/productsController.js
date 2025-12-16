@@ -98,12 +98,50 @@ export async function configureProduct(req, res) {
     // Process discount configuration if provided
     let discountConfig = null;
     if (config.discount && config.discount.enabled) {
-      discountConfig = {
-        enabled: true,
-        discountType: config.discount.discountType || 'percentage',
-        discountValue: normalizeNumeric(config.discount.discountValue),
-        weightSlabs: config.discount.weightSlabs || []
-      };
+      // Check if discount has discount_id (unified format) - fetch full discount rules
+      if (config.discount.discount_id) {
+        try {
+          // Fetch the full discount rules from discount_id
+          const discountRules = await shopifyAPI.getDiscountRuleById(config.discount.discount_id);
+          if (discountRules) {
+            // Convert discount rules to discount config format based on applied_rule
+            const appliedRule = config.discount.applied_rule || 'gold';
+            if (appliedRule === 'gold' && discountRules.gold_rules) {
+              discountConfig = {
+                enabled: true,
+                goldRules: discountRules.gold_rules
+              };
+            } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+              discountConfig = {
+                enabled: true,
+                diamondRules: discountRules.diamond_rules
+              };
+            } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+              discountConfig = {
+                enabled: true,
+                silverRules: discountRules.silver_rules
+              };
+            }
+          }
+        } catch (error) {
+          console.error('Error fetching discount rules:', error);
+          // Fall back to old format if fetching fails
+          discountConfig = {
+            enabled: true,
+            discountType: config.discount.discountType || 'percentage',
+            discountValue: normalizeNumeric(config.discount.discountValue),
+            weightSlabs: config.discount.weightSlabs || []
+          };
+        }
+      } else {
+        // Old format - use discount as-is
+        discountConfig = {
+          enabled: true,
+          discountType: config.discount.discountType || 'percentage',
+          discountValue: normalizeNumeric(config.discount.discountValue),
+          weightSlabs: config.discount.weightSlabs || []
+        };
+      }
     }
 
     // Normalize all numeric fields to default to 0 if empty
@@ -133,6 +171,17 @@ export async function configureProduct(req, res) {
     console.log('Discount:', discountConfig);
     console.log('Price breakdown:', priceBreakdown);
 
+    // Prepare discount for saving - preserve original discount object with discount_id and applied_rule
+    // but also include the calculated discount_amount for display
+    let discountToSave = null;
+    if (config.discount && config.discount.enabled) {
+      discountToSave = {
+        ...config.discount, // Preserve original fields (discount_id, applied_rule, discount_title, etc.)
+        enabled: true,
+        discount_amount: priceBreakdown.discount?.discountAmount || 0 // Add calculated discount amount
+      };
+    }
+
     // Add calculated values to config for metafields
     const configWithCalculations = {
       ...normalizedConfig,
@@ -142,7 +191,7 @@ export async function configureProduct(req, res) {
       labourCharge: priceBreakdown.labourCharge || 0,
       wastageCharge: priceBreakdown.wastageCharge || 0,
       taxAmount: priceBreakdown.taxAmount || 0,
-      discount: discountConfig,
+      discount: discountToSave, // Save original discount with discount_id, not processed discountConfig
       productCode: config.productCode || productId.split('/').pop() // Use product ID as code if not provided
     };
 
@@ -322,14 +371,35 @@ export async function calculatePrice(req, res) {
     const storedDiscount = discountConfig || config.discount;
     
     if (storedDiscount && storedDiscount.discount_amount && !priceBreakdown.discount) {
+      const discountAmount = parseFloat(storedDiscount.discount_amount) || 0;
+      
       priceBreakdown.discount = {
-        discountAmount: parseFloat(storedDiscount.discount_amount) || 0,
+        discountAmount: discountAmount,
         discountTitle: storedDiscount.discount_title || 'Discount',
         discountType: 'stored',
         discountAppliedOn: storedDiscount.applied_rule || 'unknown'
       };
-      // Calculate final price after discount
-      priceBreakdown.finalPriceAfterDiscount = priceBreakdown.finalPrice - priceBreakdown.discount.discountAmount;
+      
+      // Get tax percent from config or calculate from existing taxAmount and subtotal
+      const taxPercent = parseFloat(configForCalculator.taxPercent) || 
+                        (priceBreakdown.subtotal > 0 ? (priceBreakdown.taxAmount / priceBreakdown.subtotal) * 100 : 0);
+      
+      // Calculate tax on original subtotal (before discount) for "Price Before Discount" display
+      const taxAmountBeforeDiscount = priceBreakdown.subtotal * (taxPercent / 100);
+      const priceBeforeDiscount = priceBreakdown.subtotal + taxAmountBeforeDiscount;
+      
+      // Apply discount to subtotal before tax (correct calculation order)
+      const discountedSubtotal = Math.max(0, priceBreakdown.subtotal - discountAmount);
+      
+      // Calculate tax on discounted subtotal
+      const taxAmountOnDiscounted = discountedSubtotal * (taxPercent / 100);
+      
+      // Final price = discounted subtotal + tax
+      priceBreakdown.taxAmountBeforeDiscount = Math.round(taxAmountBeforeDiscount * 100) / 100;
+      priceBreakdown.priceBeforeDiscount = Math.round(priceBeforeDiscount * 100) / 100;
+      priceBreakdown.discountedSubtotal = Math.round(discountedSubtotal * 100) / 100;
+      priceBreakdown.taxAmount = Math.round(taxAmountOnDiscounted * 100) / 100;
+      priceBreakdown.finalPriceAfterDiscount = Math.round((discountedSubtotal + taxAmountOnDiscounted) * 100) / 100;
     }
 
     res.json({

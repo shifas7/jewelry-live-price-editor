@@ -624,22 +624,21 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                 <span>Stone Cost</span>
                                 <span>₹{calculation.stoneCost.toFixed(2)}</span>
                             </div>
-                            <div className="calculation-row">
-                                <span>Tax Amount ({config.taxPercent}%)</span>
-                                <span>₹{calculation.taxAmount.toFixed(2)}</span>
+                            
+                            {/* Show Subtotal */}
+                            <div className="calculation-row" style={{
+                                borderTop: '1px solid #e0e0e0',
+                                paddingTop: '8px',
+                                marginTop: '4px',
+                                fontWeight: '500'
+                            }}>
+                                <span>Subtotal</span>
+                                <span>₹{calculation.subtotal.toFixed(2)}</span>
                             </div>
                             
                             {/* Discount Information */}
-                            {calculation.discount && calculation.discount.discountAmount > 0 && (
+                            {calculation.discount && calculation.discount.discountAmount > 0 ? (
                                 <>
-                                    <div className="calculation-row" style={{
-                                        borderTop: '1px solid #e0e0e0',
-                                        paddingTop: '8px',
-                                        marginTop: '4px'
-                                    }}>
-                                        <span style={{textDecoration: 'line-through', color: '#999'}}>Price Before Discount</span>
-                                        <span style={{textDecoration: 'line-through', color: '#999'}}>₹{calculation.finalPrice.toFixed(2)}</span>
-                                    </div>
                                     <div className="calculation-row" style={{
                                         color: '#28a745',
                                         fontWeight: '500'
@@ -654,7 +653,27 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                                         </span>
                                         <span style={{color: '#28a745'}}>-₹{calculation.discount.discountAmount.toFixed(2)}</span>
                                     </div>
+                                    <div className="calculation-row">
+                                        <span>Discounted Subtotal</span>
+                                        <span>₹{(calculation.discountedSubtotal || (calculation.subtotal - calculation.discount.discountAmount)).toFixed(2)}</span>
+                                    </div>
+                                    <div className="calculation-row" style={{
+                                        textDecoration: 'line-through',
+                                        color: '#999'
+                                    }}>
+                                        <span>Price Before Discount</span>
+                                        <span style={{textDecoration: 'line-through', color: '#999'}}>₹{(calculation.priceBeforeDiscount || calculation.finalPrice).toFixed(2)}</span>
+                                    </div>
+                                    <div className="calculation-row">
+                                        <span>Tax Amount ({config.taxPercent}%)</span>
+                                        <span>₹{calculation.taxAmount.toFixed(2)}</span>
+                                    </div>
                                 </>
+                            ) : (
+                                <div className="calculation-row">
+                                    <span>Tax Amount ({config.taxPercent}%)</span>
+                                    <span>₹{calculation.taxAmount.toFixed(2)}</span>
+                                </div>
                             )}
                             
                             <div className="calculation-row total" style={{
