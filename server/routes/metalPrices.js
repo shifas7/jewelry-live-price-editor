@@ -10,6 +10,12 @@ const router = express.Router();
 router.get('/', metalPricesController.getMetalPrices);
 
 /**
+ * GET /api/metal-prices/formatted
+ * Get formatted metal prices for Shopify theme display
+ */
+router.get('/formatted', metalPricesController.getFormattedMetalPrices);
+
+/**
  * POST /api/metal-prices
  * Update metal prices
  */

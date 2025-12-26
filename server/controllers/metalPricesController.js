@@ -1,6 +1,16 @@
 import { getPriceCalculator, getShopifyAPI, updatePriceCalculatorRates } from '../middleware/calculatorInit.js';
 
 /**
+ * Format price with Indian Rupee symbol and /g suffix
+ */
+function formatPrice(price) {
+  if (!price) return '';
+  // Format number with Indian numbering system (lakhs, crores)
+  const formatted = new Intl.NumberFormat('en-IN').format(price);
+  return `₹${formatted}/g`;
+}
+
+/**
  * Get current metal prices
  */
 export async function getMetalPrices(req, res) {
@@ -12,6 +22,74 @@ export async function getMetalPrices(req, res) {
     res.json({
       success: true,
       data: prices || priceCalculator.getMetalRates()
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Get formatted metal prices for Shopify theme display
+ * Returns prices formatted with ₹ symbol and /g suffix
+ */
+export async function getFormattedMetalPrices(req, res) {
+  try {
+    const shopifyAPI = getShopifyAPI();
+    const prices = await shopifyAPI.getMetalPrices();
+    
+    if (!prices) {
+      const priceCalculator = getPriceCalculator();
+      const fallbackPrices = priceCalculator.getMetalRates();
+      
+      if (!fallbackPrices) {
+        return res.json({
+          success: true,
+          data: {
+            formatted: [],
+            raw: {}
+          }
+        });
+      }
+      
+      // Use fallback prices
+      const formattedPrices = [
+        { label: 'Gold 22K', price: formatPrice(fallbackPrices.gold22kt), key: 'gold22kt' },
+        { label: 'Gold 18K', price: formatPrice(fallbackPrices.gold18kt), key: 'gold18kt' },
+        { label: 'Gold 24K', price: formatPrice(fallbackPrices.gold24kt), key: 'gold24kt' },
+        { label: 'Gold 14K', price: formatPrice(fallbackPrices.gold14kt), key: 'gold14kt' },
+        { label: 'Silver', price: formatPrice(fallbackPrices.silver), key: 'silver' },
+        { label: 'Platinum', price: formatPrice(fallbackPrices.platinum), key: 'platinum' }
+      ].filter(item => item.price);
+      
+      return res.json({
+        success: true,
+        data: {
+          formatted: formattedPrices,
+          raw: fallbackPrices
+        }
+      });
+    }
+
+    // Map to formatted display format
+    // Prices from Shopify API have keys like gold22kt (no underscores)
+    const formattedPrices = [
+      { label: 'Gold 22K', price: formatPrice(prices.gold22kt), key: 'gold22kt' },
+      { label: 'Gold 18K', price: formatPrice(prices.gold18kt), key: 'gold18kt' },
+      { label: 'Gold 24K', price: formatPrice(prices.gold24kt), key: 'gold24kt' },
+      { label: 'Gold 14K', price: formatPrice(prices.gold14kt), key: 'gold14kt' },
+      { label: 'Silver', price: formatPrice(prices.silver), key: 'silver' },
+      { label: 'Platinum', price: formatPrice(prices.platinum), key: 'platinum' }
+    ].filter(item => item.price); // Remove empty prices
+    
+    res.json({
+      success: true,
+      data: {
+        formatted: formattedPrices,
+        raw: prices
+      }
     });
   } catch (error) {
     res.status(500).json({
