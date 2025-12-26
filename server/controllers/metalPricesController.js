@@ -54,11 +54,11 @@ export async function getFormattedMetalPrices(req, res) {
         });
       }
       
-      // Use fallback prices
+      // Use fallback prices - Order: Gold 24K, Gold 22K, Gold 18K, Gold 14K, Silver, Platinum
       const formattedPrices = [
+        { label: 'Gold 24K', price: formatPrice(fallbackPrices.gold24kt), key: 'gold24kt' },
         { label: 'Gold 22K', price: formatPrice(fallbackPrices.gold22kt), key: 'gold22kt' },
         { label: 'Gold 18K', price: formatPrice(fallbackPrices.gold18kt), key: 'gold18kt' },
-        { label: 'Gold 24K', price: formatPrice(fallbackPrices.gold24kt), key: 'gold24kt' },
         { label: 'Gold 14K', price: formatPrice(fallbackPrices.gold14kt), key: 'gold14kt' },
         { label: 'Silver', price: formatPrice(fallbackPrices.silver), key: 'silver' },
         { label: 'Platinum', price: formatPrice(fallbackPrices.platinum), key: 'platinum' }
@@ -75,10 +75,11 @@ export async function getFormattedMetalPrices(req, res) {
 
     // Map to formatted display format
     // Prices from Shopify API have keys like gold22kt (no underscores)
+    // Order: Gold 24K, Gold 22K, Gold 18K, Gold 14K, Silver, Platinum
     const formattedPrices = [
+      { label: 'Gold 24K', price: formatPrice(prices.gold24kt), key: 'gold24kt' },
       { label: 'Gold 22K', price: formatPrice(prices.gold22kt), key: 'gold22kt' },
       { label: 'Gold 18K', price: formatPrice(prices.gold18kt), key: 'gold18kt' },
-      { label: 'Gold 24K', price: formatPrice(prices.gold24kt), key: 'gold24kt' },
       { label: 'Gold 14K', price: formatPrice(prices.gold14kt), key: 'gold14kt' },
       { label: 'Silver', price: formatPrice(prices.silver), key: 'silver' },
       { label: 'Platinum', price: formatPrice(prices.platinum), key: 'platinum' }
