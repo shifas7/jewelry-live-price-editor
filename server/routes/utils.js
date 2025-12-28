@@ -20,8 +20,21 @@ router.get('/status', utilsController.getStatus);
 /**
  * POST /api/refresh-prices
  * Bulk update all product prices based on current metal rates
+ * Returns job ID immediately, processes in background
  */
 router.post('/refresh-prices', metalPricesController.refreshPrices);
+
+/**
+ * GET /api/refresh-prices/status/:jobId
+ * Get status of a refresh prices job
+ */
+router.get('/refresh-prices/status/:jobId', metalPricesController.getRefreshStatus);
+
+/**
+ * POST /api/refresh-prices/cancel/:jobId
+ * Cancel a refresh prices job
+ */
+router.post('/refresh-prices/cancel/:jobId', metalPricesController.cancelRefresh);
 
 /**
  * POST /api/calculate-price

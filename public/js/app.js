@@ -3,6 +3,7 @@ const { useState, useEffect } = React;
 // API functions are available from window.API
 const API = window.API || {};
 
+
 function App() {
     const [activeTab, setActiveTab] = useState('dashboard');
     const [metalPrices, setMetalPrices] = useState({
@@ -124,34 +125,87 @@ function App() {
             setLoading(true);
             await API.updateMetalPrices(metalPrices);
             setShowSuccess(true);
+            alert('Metal prices saved successfully!');
             setTimeout(() => setShowSuccess(false), 3000);
         } catch (error) {
             console.error('Error updating metal prices:', error);
-            alert('Error updating prices');
+            alert('Error: Error updating metal prices: ' + error.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleRefreshPrices = async () => {
-        if (!confirm('This will update all product prices based on current metal rates. Continue?')) {
-            return;
-        }
+    const [refreshJobId, setRefreshJobId] = useState(null);
+    const [showRefreshModal, setShowRefreshModal] = useState(false);
+    const [confirmModal, setConfirmModal] = useState({ isOpen: false, title: '', message: '', onConfirm: null });
 
-        try {
-            setLoading(true);
-            const data = await API.refreshPrices();
-            if (data.success) {
-                alert(data.message);
-                loadProducts();
+    const showConfirm = (title, message, onConfirm) => {
+        setConfirmModal({
+            isOpen: true,
+            title,
+            message,
+            onConfirm: () => {
+                setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null });
+                if (onConfirm) onConfirm();
             }
-        } catch (error) {
-            console.error('Error refreshing prices:', error);
-            alert('Error refreshing prices');
-        } finally {
-            setLoading(false);
+        });
+    };
+
+    const handleRefreshPrices = () => {
+        showConfirm(
+            'Refresh Product Prices',
+            'This will update all product prices based on current metal rates. This may take several minutes for large catalogs. Continue?',
+            async () => {
+                try {
+                    // Show modal immediately with loading state (before API call completes)
+                    setShowRefreshModal(true);
+                    setLoading(true);
+                    
+                    const data = await API.refreshPrices();
+            
+                    // Update with job ID once received
+                    if (data && data.success) {
+                        const jobId = data.data?.jobId;
+                        
+                        if (jobId) {
+                            setRefreshJobId(jobId);
+                        } else {
+                            console.error('No jobId in response:', data);
+                            setShowRefreshModal(false);
+                            alert('Error: No job ID received from server');
+                        }
+                    } else {
+                        console.error('API response not successful:', data);
+                        setShowRefreshModal(false);
+                        alert('Error: Error starting refresh prices: ' + (data?.error || 'Unknown error'));
+                    }
+                } catch (error) {
+                    console.error('Error starting refresh prices:', error);
+                    setShowRefreshModal(false);
+                    alert('Error: Error starting refresh prices: ' + error.message);
+                } finally {
+                    setLoading(false);
+                }
+            }
+        );
+    };
+
+    const handleRefreshModalClose = (wasSuccessful = false) => {
+        setShowRefreshModal(false);
+        setRefreshJobId(null);
+        // Reload products to show updated prices
+        loadProducts();
+        
+        if (wasSuccessful) {
+            alert('Product prices refreshed successfully!');
         }
     };
+
+    const handleRefreshCancel = () => {
+        setShowRefreshModal(false);
+        setRefreshJobId(null);
+    };
+
 
     return (
         <div className="app-container">
@@ -250,6 +304,88 @@ function App() {
                     saveStonePricing={API.saveStonePricing}
                 />
             )}
+
+            {showRefreshModal && (
+                window.RefreshProgressModal ? (
+                    <window.RefreshProgressModal
+                        key={refreshJobId || 'loading-' + Date.now()}
+                        jobId={refreshJobId}
+                        onClose={(success) => handleRefreshModalClose(success)}
+                        onCancel={handleRefreshCancel}
+                        getRefreshStatus={API.getRefreshStatus}
+                        cancelRefresh={API.cancelRefresh}
+                    />
+                ) : (
+                    <div className="modal" key="fallback-modal">
+                        <div className="modal-content" style={{ maxWidth: '500px' }}>
+                            <div className="modal-header">
+                                <h2>🔄 Refreshing Product Prices</h2>
+                                <button className="close-btn" onClick={() => handleRefreshModalClose(false)}>×</button>
+                            </div>
+                            <div style={{ padding: '20px', textAlign: 'center' }}>
+                                {refreshJobId ? (
+                                    <>
+                                        <p><strong>Job ID:</strong> {refreshJobId}</p>
+                                        <p style={{ color: '#6d7175', fontSize: '14px', marginTop: '16px' }}>
+                                            RefreshProgressModal component not loaded. Please refresh the page.
+                                        </p>
+                                    </>
+                                ) : (
+                                    <p style={{ color: '#6d7175', fontSize: '14px' }}>
+                                        Starting refresh job...
+                                    </p>
+                                )}
+                                <button className="btn btn-primary" onClick={() => handleRefreshModalClose(false)} style={{ marginTop: '16px' }}>
+                                    Close
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                )
+            )}
+
+            {/* Confirmation Modal */}
+            {confirmModal.isOpen && (
+                window.ConfirmModal ? (
+                    <window.ConfirmModal
+                        isOpen={confirmModal.isOpen}
+                        title={confirmModal.title}
+                        message={confirmModal.message}
+                        onConfirm={confirmModal.onConfirm}
+                        onCancel={() => setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })}
+                        confirmText="Continue"
+                        cancelText="Cancel"
+                    />
+                ) : (
+                    <div className="modal">
+                        <div className="modal-content" style={{ maxWidth: '450px' }}>
+                            <div className="modal-header">
+                                <h2>{confirmModal.title || 'Confirm'}</h2>
+                            </div>
+                            <div style={{ padding: '20px' }}>
+                                <p style={{ marginBottom: '24px', fontSize: '14px', color: '#202223' }}>
+                                    {confirmModal.message}
+                                </p>
+                                <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '12px' }}>
+                                    <button
+                                        className="btn btn-secondary"
+                                        onClick={() => setConfirmModal({ isOpen: false, title: '', message: '', onConfirm: null })}
+                                    >
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className="btn btn-primary"
+                                        onClick={confirmModal.onConfirm}
+                                    >
+                                        Continue
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )
+            )}
+
         </div>
     );
 }

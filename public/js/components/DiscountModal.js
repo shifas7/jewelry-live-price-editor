@@ -104,7 +104,7 @@ function DiscountModal({ discount, onClose, onSave }) {
       onSave();
     } catch (error) {
       console.error('Error saving discount:', error);
-      alert('Error saving discount: ' + error.message);
+      alert('Error: Error saving discount: ' + error.message);
     }
   };
 

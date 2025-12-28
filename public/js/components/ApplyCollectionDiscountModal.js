@@ -3,18 +3,21 @@ const { useState } = React;
 function ApplyCollectionDiscountModal({ discount, collections, onClose, onApply }) {
   const [selectedCollection, setSelectedCollection] = useState('');
   const [applying, setApplying] = useState(false);
+  const [applyConfirm, setApplyConfirm] = useState(false);
 
   const API = window.API || {};
 
-  const handleApply = async () => {
+  const handleApply = () => {
     if (!selectedCollection) {
-      alert('Please select a collection');
+      alert('Error: Please select a collection');
       return;
     }
 
-    if (!confirm(`Apply discount "${discount.rule_name}" to all products in the selected collection?`)) {
-      return;
-    }
+    setApplyConfirm(true);
+  };
+
+  const confirmApply = async () => {
+    setApplyConfirm(false);
 
     try {
       setApplying(true);
@@ -34,7 +37,7 @@ function ApplyCollectionDiscountModal({ discount, collections, onClose, onApply 
       onApply();
     } catch (error) {
       console.error('Error applying discount:', error);
-      alert('Error applying discount: ' + error.message);
+      alert('Error: Error applying discount: ' + error.message);
     } finally {
       setApplying(false);
     }
@@ -100,6 +103,19 @@ function ApplyCollectionDiscountModal({ discount, collections, onClose, onApply 
           </button>
         </div>
       </div>
+
+      {/* Apply Confirmation Modal */}
+      {applyConfirm && window.ConfirmModal && (
+        <window.ConfirmModal
+          isOpen={applyConfirm}
+          title="Apply Discount to Collection"
+          message={`Apply discount "${discount.rule_name}" to all products in the selected collection?`}
+          onConfirm={confirmApply}
+          onCancel={() => setApplyConfirm(false)}
+          confirmText="Apply"
+          cancelText="Cancel"
+        />
+      )}
     </div>
   );
 }

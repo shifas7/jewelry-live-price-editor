@@ -3,21 +3,26 @@ const { useState, useEffect } = React;
 function DiscountsTab({ discounts, loading, onRefresh, collections }) {
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [editingDiscount, setEditingDiscount] = useState(null);
+  const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, ruleId: null });
 
   const API = window.API || {};
 
-  const handleDelete = async (ruleId) => {
-    if (!confirm('Are you sure you want to delete this discount? This will remove discounts from all target products.')) {
-      return;
-    }
+  const handleDelete = (ruleId) => {
+    setDeleteConfirm({ isOpen: true, ruleId });
+  };
+
+  const confirmDelete = async () => {
+    if (!deleteConfirm.ruleId) return;
 
     try {
-      await API.deleteDiscount(ruleId);
+      await API.deleteDiscount(deleteConfirm.ruleId);
       alert('Discount deleted successfully');
       onRefresh();
     } catch (error) {
       console.error('Error deleting discount:', error);
-      alert('Error deleting discount: ' + error.message);
+      alert('Error: Error deleting discount: ' + error.message);
+    } finally {
+      setDeleteConfirm({ isOpen: false, ruleId: null });
     }
   };
 
@@ -180,6 +185,20 @@ function DiscountsTab({ discounts, loading, onRefresh, collections }) {
             setEditingDiscount(null);
             onRefresh();
           }}
+        />
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirm.isOpen && window.ConfirmModal && (
+        <window.ConfirmModal
+          isOpen={deleteConfirm.isOpen}
+          title="Delete Discount"
+          message="Are you sure you want to delete this discount? This will remove discounts from all target products."
+          onConfirm={confirmDelete}
+          onCancel={() => setDeleteConfirm({ isOpen: false, ruleId: null })}
+          confirmText="Delete"
+          cancelText="Cancel"
+          confirmButtonClass="btn-secondary"
         />
       )}
     </div>

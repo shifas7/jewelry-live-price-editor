@@ -211,12 +211,12 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         try {
             // Validate required fields
             if (!config.metalWeight || config.metalWeight === '') {
-                alert('Metal Weight is required');
+                alert('Error: Metal Weight is required');
                 return;
             }
 
             if (!config.metalType || config.metalType === '') {
-                alert('Metal Type is required');
+                alert('Error: Metal Type is required');
                 return;
             }
 
@@ -256,7 +256,7 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                     try {
                         const errors = JSON.parse(data.error);
                         if (Array.isArray(errors) && errors.length > 0) {
-                            errorMessage = errors.map(e => e.message || e).join('\n');
+                            errorMessage = errors.map(e => e.message || e).join(', ');
                         } else {
                             errorMessage = data.error;
                         }
@@ -264,11 +264,11 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                         errorMessage = data.error;
                     }
                 }
-                alert(errorMessage);
+                alert('Error: ' + errorMessage);
             }
         } catch (error) {
             console.error('Error saving configuration:', error);
-            alert('Error saving configuration: ' + error.message);
+            alert('Error: Error saving configuration: ' + error.message);
         }
     };
 

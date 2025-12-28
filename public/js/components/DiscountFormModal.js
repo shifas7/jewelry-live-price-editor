@@ -163,7 +163,7 @@ function DiscountFormModal({ discount, onClose, onSave, collections }) {
       onClose();
     } catch (error) {
       console.error('Error saving discount:', error);
-      alert('Error saving discount: ' + error.message);
+      alert('Error: Error saving discount: ' + error.message);
     } finally {
       setSaving(false);
     }

@@ -31,7 +31,7 @@ function ConflictResolutionModal({ conflicts, discount, onResolve, onCancel }) {
       onResolve(resolutions);
     } catch (error) {
       console.error('Error resolving conflicts:', error);
-      alert('Error resolving conflicts: ' + error.message);
+      alert('Error: Error resolving conflicts: ' + error.message);
     } finally {
       setResolving(false);
     }

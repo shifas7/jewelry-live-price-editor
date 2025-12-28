@@ -1,16 +1,24 @@
 const { useState, useEffect } = React;
 
 function DashboardTab({ metalPrices, handleMetalPriceChange, handleUpdateMetalPrices, handleRefreshPrices, showSuccess, loading, stonePrices, setShowStoneModal, setSelectedStone, loadStonePrices, deleteStonePricing }) {
-    const handleDeleteStone = async (stone) => {
-        if (confirm(`Delete stone pricing for ${stone.stone_type} (ID: ${stone.stone_id})?`)) {
-            try {
-                await deleteStonePricing(stone.id);
-                alert('Stone pricing deleted successfully!');
-                loadStonePrices();
-            } catch (error) {
-                console.error('Error deleting stone:', error);
-                alert('Error deleting stone pricing');
-            }
+    const [deleteConfirm, setDeleteConfirm] = useState({ isOpen: false, stone: null });
+
+    const handleDeleteStone = (stone) => {
+        setDeleteConfirm({ isOpen: true, stone });
+    };
+
+    const confirmDeleteStone = async () => {
+        if (!deleteConfirm.stone) return;
+        
+        try {
+            await deleteStonePricing(deleteConfirm.stone.id);
+            alert('Stone pricing deleted successfully!');
+            loadStonePrices();
+        } catch (error) {
+            console.error('Error deleting stone:', error);
+            alert('Error: Error deleting stone pricing: ' + error.message);
+        } finally {
+            setDeleteConfirm({ isOpen: false, stone: null });
         }
     };
 
@@ -180,6 +188,20 @@ function DashboardTab({ metalPrices, handleMetalPriceChange, handleUpdateMetalPr
                     </tbody>
                 </table>
             </div>
+
+            {/* Delete Confirmation Modal */}
+            {deleteConfirm.isOpen && deleteConfirm.stone && window.ConfirmModal && (
+                <window.ConfirmModal
+                    isOpen={deleteConfirm.isOpen}
+                    title="Delete Stone Pricing"
+                    message={`Delete stone pricing for ${deleteConfirm.stone.stone_type} (ID: ${deleteConfirm.stone.stone_id})?`}
+                    onConfirm={confirmDeleteStone}
+                    onCancel={() => setDeleteConfirm({ isOpen: false, stone: null })}
+                    confirmText="Delete"
+                    cancelText="Cancel"
+                    confirmButtonClass="btn-secondary"
+                />
+            )}
         </>
     );
 }

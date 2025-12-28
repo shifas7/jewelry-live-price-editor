@@ -1,4 +1,5 @@
 import { getPriceCalculator, getShopifyAPI, updatePriceCalculatorRates } from '../middleware/calculatorInit.js';
+import { log } from '../utils/logger.js';
 
 /**
  * Format price with Indian Rupee symbol and /g suffix
@@ -152,29 +153,251 @@ export async function updateMetalPrices(req, res) {
 }
 
 /**
+ * In-memory job store for refresh price jobs
+ * In production, consider using Redis or a database for persistence
+ */
+const refreshJobs = new Map();
+
+/**
+ * Generate unique job ID
+ */
+function generateJobId() {
+  return `refresh-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+}
+
+/**
+ * Process refresh prices job in background
+ */
+async function processRefreshJob(jobId, priceCalculator, shopifyAPI, currentRates) {
+  const job = refreshJobs.get(jobId);
+  if (!job) return;
+
+  try {
+    job.status = 'processing';
+    job.startedAt = new Date();
+    log.info('Refresh prices job started', { jobId, startedAt: job.startedAt }, jobId);
+
+    // Progress callback to update job status
+    const progressCallback = (processed, total, updates) => {
+      const job = refreshJobs.get(jobId);
+      if (!job || job.status === 'cancelled') return;
+
+      job.processed = processed;
+      job.total = total;
+      job.updates = updates;
+      job.successCount = updates.filter(u => u.success).length;
+      job.failCount = updates.filter(u => !u.success).length;
+      job.progress = Math.round((processed / total) * 100);
+      
+      // Calculate ETA
+      if (processed > 0) {
+        const elapsed = (Date.now() - job.startedAt.getTime()) / 1000; // seconds
+        const rate = processed / elapsed; // products per second
+        const remaining = total - processed;
+        job.eta = Math.round(remaining / rate); // seconds remaining
+      }
+    };
+
+    // Process with progress tracking
+    const updates = await shopifyAPI.bulkUpdatePrices(
+      currentRates,
+      priceCalculator,
+      progressCallback,
+      log
+    );
+
+    const successCount = updates.filter(u => u.success).length;
+    const failCount = updates.filter(u => !u.success).length;
+
+    job.status = 'completed';
+    job.completedAt = new Date();
+    job.processed = job.total;
+    job.progress = 100;
+    job.successCount = successCount;
+    job.failCount = failCount;
+    job.updates = updates;
+    job.eta = 0;
+
+    log.info('Refresh prices job completed', {
+      jobId,
+      total: job.total,
+      success: successCount,
+      failed: failCount,
+      duration: (job.completedAt.getTime() - job.startedAt.getTime()) / 1000
+    }, jobId);
+
+  } catch (error) {
+    const job = refreshJobs.get(jobId);
+    if (job) {
+      job.status = 'failed';
+      job.completedAt = new Date();
+      job.error = error.message;
+    }
+    log.error('Refresh prices job failed', { jobId, error: error.message, stack: error.stack }, jobId);
+  }
+}
+
+/**
  * Bulk update all product prices based on current metal rates
+ * Returns job ID immediately and processes in background
  */
 export async function refreshPrices(req, res) {
   try {
     const priceCalculator = getPriceCalculator();
     const shopifyAPI = getShopifyAPI();
     const currentRates = priceCalculator.getMetalRates();
-    const updates = await shopifyAPI.bulkUpdatePrices(currentRates, priceCalculator);
 
-    const successCount = updates.filter(u => u.success).length;
-    const failCount = updates.filter(u => !u.success).length;
+    // Generate job ID
+    const jobId = generateJobId();
 
+    // Create job entry
+    const job = {
+      id: jobId,
+      status: 'queued',
+      createdAt: new Date(),
+      startedAt: null,
+      completedAt: null,
+      total: 0,
+      processed: 0,
+      progress: 0,
+      successCount: 0,
+      failCount: 0,
+      eta: null,
+      updates: [],
+      error: null
+    };
+
+    refreshJobs.set(jobId, job);
+
+    log.info('Refresh prices job created', { jobId }, jobId);
+
+    // Start processing in background (don't await)
+    processRefreshJob(jobId, priceCalculator, shopifyAPI, currentRates).catch(err => {
+      log.error('Unexpected error in background job', { jobId, error: err.message }, jobId);
+    });
+
+    // Return job ID immediately
     res.json({
       success: true,
-      message: `Updated ${successCount} products successfully. ${failCount} failed.`,
+      message: 'Refresh prices job started',
       data: {
-        totalProducts: updates.length,
-        successCount,
-        failCount,
-        updates
+        jobId,
+        status: 'queued'
       }
     });
   } catch (error) {
+    log.error('Error creating refresh prices job', { error: error.message }, null);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Get refresh prices job status
+ */
+export async function getRefreshStatus(req, res) {
+  try {
+    const { jobId } = req.params;
+
+    if (!jobId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Job ID is required'
+      });
+    }
+
+    const job = refreshJobs.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    // Clean up old completed jobs (older than 1 hour)
+    if (job.status === 'completed' || job.status === 'failed') {
+      const age = Date.now() - job.completedAt.getTime();
+      if (age > 3600000) { // 1 hour
+        refreshJobs.delete(jobId);
+      }
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: job.id,
+        status: job.status,
+        createdAt: job.createdAt,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        total: job.total,
+        processed: job.processed,
+        progress: job.progress,
+        successCount: job.successCount,
+        failCount: job.failCount,
+        eta: job.eta,
+        error: job.error,
+        // Only include updates if job is completed
+        updates: job.status === 'completed' ? job.updates : undefined
+      }
+    });
+  } catch (error) {
+    log.error('Error getting refresh status', { error: error.message }, null);
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+}
+
+/**
+ * Cancel refresh prices job
+ */
+export async function cancelRefresh(req, res) {
+  try {
+    const { jobId } = req.params;
+
+    if (!jobId) {
+      return res.status(400).json({
+        success: false,
+        error: 'Job ID is required'
+      });
+    }
+
+    const job = refreshJobs.get(jobId);
+
+    if (!job) {
+      return res.status(404).json({
+        success: false,
+        error: 'Job not found'
+      });
+    }
+
+    if (job.status === 'completed' || job.status === 'failed') {
+      return res.status(400).json({
+        success: false,
+        error: 'Cannot cancel a completed or failed job'
+      });
+    }
+
+    job.status = 'cancelled';
+    job.completedAt = new Date();
+
+    log.info('Refresh prices job cancelled', { jobId }, jobId);
+
+    res.json({
+      success: true,
+      message: 'Job cancelled successfully',
+      data: {
+        jobId,
+        status: 'cancelled'
+      }
+    });
+  } catch (error) {
+    log.error('Error cancelling refresh job', { error: error.message }, null);
     res.status(500).json({
       success: false,
       error: error.message

@@ -27,6 +27,36 @@ function StoneModal({ stone, onClose, onSave, saveStonePricing }) {
     };
 
     const handleSave = async () => {
+        // Validation
+        if (!stoneData.stoneId || !stoneData.stoneId.trim()) {
+            alert('Error: Stone ID is required');
+            return;
+        }
+        
+        if (!stoneData.title || !stoneData.title.trim()) {
+            alert('Error: Title is required');
+            return;
+        }
+        
+        if (!stoneData.stoneType || !stoneData.stoneType.trim()) {
+            alert('Error: Stone Type is required');
+            return;
+        }
+        
+        // Validate slabs
+        if (!stoneData.slabs || stoneData.slabs.length === 0) {
+            alert('Error: At least one pricing slab is required');
+            return;
+        }
+        
+        for (let i = 0; i < stoneData.slabs.length; i++) {
+            const slab = stoneData.slabs[i];
+            if (!slab.fromWeight || !slab.toWeight || !slab.pricePerCarat) {
+                alert(`Error: Slab ${i + 1} is incomplete. Please fill all fields.`);
+                return;
+            }
+        }
+        
         try {
             // Include the stone ID if editing
             const dataToSave = {
@@ -39,10 +69,12 @@ function StoneModal({ stone, onClose, onSave, saveStonePricing }) {
                 alert(isEditing ? 'Stone pricing updated successfully!' : 'Stone pricing created successfully!');
                 onSave();
                 onClose();
+            } else {
+                alert('Error: ' + (data.error || 'Failed to save stone pricing'));
             }
         } catch (error) {
             console.error('Error saving stone pricing:', error);
-            alert('Error saving stone pricing');
+            alert('Error: Error saving stone pricing: ' + error.message);
         }
     };
 

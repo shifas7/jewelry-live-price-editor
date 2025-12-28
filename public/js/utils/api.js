@@ -38,7 +38,8 @@ window.API = {
     },
 
     /**
-     * Refresh all product prices
+     * Refresh all product prices (async job)
+     * Returns job ID immediately
      */
     async refreshPrices() {
         const response = await fetch(`${API_BASE}/refresh-prices`, {
@@ -48,7 +49,35 @@ window.API = {
         if (data.success) {
             return data;
         }
-        throw new Error(data.error || 'Failed to refresh prices');
+        throw new Error(data.error || 'Failed to start refresh prices job');
+    },
+
+    /**
+     * Get refresh prices job status
+     * @param {string} jobId - Job ID from refreshPrices response
+     */
+    async getRefreshStatus(jobId) {
+        const response = await fetch(`${API_BASE}/refresh-prices/status/${encodeURIComponent(jobId)}`);
+        const data = await response.json();
+        if (data.success) {
+            return data.data;
+        }
+        throw new Error(data.error || 'Failed to get refresh status');
+    },
+
+    /**
+     * Cancel refresh prices job
+     * @param {string} jobId - Job ID to cancel
+     */
+    async cancelRefresh(jobId) {
+        const response = await fetch(`${API_BASE}/refresh-prices/cancel/${encodeURIComponent(jobId)}`, {
+            method: 'POST'
+        });
+        const data = await response.json();
+        if (data.success) {
+            return data;
+        }
+        throw new Error(data.error || 'Failed to cancel refresh job');
     },
 
     /**

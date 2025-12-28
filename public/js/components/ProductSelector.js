@@ -51,7 +51,7 @@ function ProductSelector({ selectedProductIds = [], onSelect, onClose }) {
       setSearchResults(results);
     } catch (error) {
       console.error('Error searching:', error);
-      alert('Error searching products: ' + error.message);
+      alert('Error: Error searching products: ' + error.message);
     } finally {
       setSearching(false);
     }
@@ -101,7 +101,7 @@ function ProductSelector({ selectedProductIds = [], onSelect, onClose }) {
       setSelectedProducts(merged);
     } catch (error) {
       console.error('Error validating SKUs:', error);
-      alert('Error validating SKUs: ' + error.message);
+      alert('Error: Error validating SKUs: ' + error.message);
     } finally {
       setValidating(false);
     }

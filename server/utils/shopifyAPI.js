@@ -11,9 +11,13 @@ export class ShopifyAPI {
   }
 
   /**
-   * Make GraphQL request to Shopify Admin API
+   * Make GraphQL request to Shopify Admin API with retry logic for rate limiting
+   * @param {string} query - GraphQL query
+   * @param {Object} variables - Query variables
+   * @param {number} retries - Number of retries remaining
+   * @returns {Promise<Object>} GraphQL response data
    */
-  async graphql(query, variables = {}) {
+  async graphql(query, variables = {}, retries = 3) {
     const response = await fetch(
       `https://${this.shop}/admin/api/${this.apiVersion}/graphql.json`,
       {
@@ -28,7 +32,28 @@ export class ShopifyAPI {
 
     const result = await response.json();
     
+    // Check for rate limiting errors
     if (result.errors) {
+      const throttledError = result.errors.find(err => 
+        err.extensions?.code === 'THROTTLED' || 
+        err.message?.toLowerCase().includes('throttled')
+      );
+      
+      if (throttledError && retries > 0) {
+        // Calculate backoff delay (exponential backoff: 2^retries seconds, max 30s)
+        const delay = Math.min(Math.pow(2, 4 - retries) * 1000, 30000);
+        
+        // Check for Retry-After header
+        const retryAfter = response.headers.get('Retry-After');
+        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : delay;
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, waitTime));
+        
+        // Retry the request
+        return this.graphql(query, variables, retries - 1);
+      }
+      
       throw new Error(JSON.stringify(result.errors));
     }
 
@@ -1034,14 +1059,270 @@ export class ShopifyAPI {
   }
 
   /**
-   * Bulk update all product prices based on new metal rates
+   * Process a single product update
+   * @private
    */
-  async bulkUpdatePrices(newMetalRates, calculator) {
+  async processProductUpdate(product, calculator, stonePricing, discountCache, logger) {
+    try {
+      // Skip products without configuration
+      if (!product.configuration?.configured) {
+        return {
+          productId: product.id,
+          productTitle: product.title,
+          sku: product.sku || '',
+          success: false,
+          error: 'Product not configured'
+        };
+      }
+
+      // Calculate total stone cost from stones array or fall back to old stone_cost field
+      let totalStoneCost = 0;
+      if (product.configuration.stones && Array.isArray(product.configuration.stones) && product.configuration.stones.length > 0) {
+        // Sum all stoneCost values from the stones array
+        totalStoneCost = product.configuration.stones.reduce((sum, stone) => {
+          return sum + (parseFloat(stone.stoneCost) || 0);
+        }, 0);
+      } else {
+        // Fall back to old stone_cost field for backward compatibility
+        totalStoneCost = parseFloat(product.configuration.stone_cost) || 0;
+      }
+      
+      // Build config for price calculation
+      const priceConfig = {
+        metalWeight: product.configuration.metal_weight,
+        metalType: product.configuration.metal_type,
+        makingChargePercent: product.configuration.making_charge_percent,
+        labourType: product.configuration.labour_type,
+        labourValue: product.configuration.labour_value,
+        wastageType: product.configuration.wastage_type,
+        wastageValue: product.configuration.wastage_value,
+        stoneCost: totalStoneCost,
+        taxPercent: product.configuration.tax_percent,
+        stones: product.configuration.stones || [] // Include stones array for product type detection
+      };
+      
+      // Check if product has an existing discount
+      let discountConfig = null;
+      
+      if (product.configuration.discount && product.configuration.discount.enabled && product.configuration.discount.discount_id) {
+        const discountId = product.configuration.discount.discount_id;
+        
+        // Check cache first
+        if (!discountCache.has(discountId)) {
+          try {
+            // Fetch the full discount rules from discount_id
+            const discountRules = await this.getDiscountRuleById(discountId);
+            if (discountRules) {
+              // Store in cache
+              discountCache.set(discountId, discountRules);
+            }
+          } catch (error) {
+            logger?.warn(`Error fetching discount rules for product ${product.id}`, { 
+              productId: product.id, 
+              discountId, 
+              error: error.message 
+            });
+            // Continue without discount if fetching fails
+          }
+        }
+        
+        // Get discount rules from cache
+        const discountRules = discountCache.get(discountId);
+        if (discountRules) {
+          // Convert discount rules to discount config format based on applied_rule
+          const appliedRule = product.configuration.discount.applied_rule || 'gold';
+          if (appliedRule === 'gold' && discountRules.gold_rules) {
+            discountConfig = {
+              enabled: true,
+              goldRules: discountRules.gold_rules
+            };
+          } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+            discountConfig = {
+              enabled: true,
+              diamondRules: discountRules.diamond_rules
+            };
+          } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+            discountConfig = {
+              enabled: true,
+              silverRules: discountRules.silver_rules
+            };
+          }
+        }
+      }
+      
+      // Calculate price with or without discount
+      const finalPriceBreakdown = calculator.calculatePrice(priceConfig, discountConfig, stonePricing);
+      
+      // Use finalPriceAfterDiscount if discount was applied, otherwise use finalPrice
+      const finalPrice = finalPriceBreakdown.finalPriceAfterDiscount || finalPriceBreakdown.finalPrice;
+      
+      // Round final price up to nearest integer
+      const roundedPrice = Math.ceil(finalPrice);
+
+      // Update price-related metafields so frontend displays correct values
+      try {
+        await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
+      } catch (metafieldError) {
+        // Check if it's a throttling error - if so, we'll retry the whole product update
+        const isThrottled = metafieldError.message?.includes('Throttled') || 
+                            metafieldError.message?.includes('THROTTLED');
+        
+        if (isThrottled) {
+          logger?.warn(`Throttled while updating metafields for product ${product.id}, will retry`, {
+            productId: product.id
+          });
+          // Wait a bit and retry the metafield update (optimized from 2000ms to 1000ms)
+          await new Promise(resolve => setTimeout(resolve, 1000));
+          try {
+            await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
+          } catch (retryError) {
+            logger?.warn(`Failed to update metafields for product ${product.id} after retry`, {
+              productId: product.id,
+              error: retryError.message
+            });
+            // Continue with price update even if metafield update fails
+          }
+        } else {
+          logger?.warn(`Failed to update metafields for product ${product.id}`, {
+            productId: product.id,
+            error: metafieldError.message
+          });
+          // Continue with price update even if metafield update fails
+        }
+      }
+      
+      // Update discount metafield with new discount amount if discount was applied
+      if (discountConfig && finalPriceBreakdown.discount) {
+        try {
+          const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
+          const updatedDiscountMetafield = {
+            ...product.configuration.discount,
+            discount_amount: discountAmount,
+            applied_at: new Date().toISOString()
+          };
+          await this.updateProductDiscount(product.id, updatedDiscountMetafield);
+        } catch (discountError) {
+          // Check if it's a throttling error
+          const isThrottled = discountError.message?.includes('Throttled') || 
+                              discountError.message?.includes('THROTTLED');
+          
+          if (isThrottled) {
+            logger?.warn(`Throttled while updating discount metafield for product ${product.id}`, {
+              productId: product.id
+            });
+            // Wait and retry (optimized from 2000ms to 1000ms)
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            try {
+              const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
+              const updatedDiscountMetafield = {
+                ...product.configuration.discount,
+                discount_amount: discountAmount,
+                applied_at: new Date().toISOString()
+              };
+              await this.updateProductDiscount(product.id, updatedDiscountMetafield);
+            } catch (retryError) {
+              logger?.warn(`Failed to update discount metafield for product ${product.id} after retry`, {
+                productId: product.id,
+                error: retryError.message
+              });
+            }
+          } else {
+            logger?.warn(`Failed to update discount metafield for product ${product.id}`, {
+              productId: product.id,
+              error: discountError.message
+            });
+          }
+          // Continue with price update even if discount metafield update fails
+        }
+      }
+
+      // Update variant price using productVariantsBulkUpdate
+      // This already uses graphql() which has retry logic, but we'll add extra handling here too
+      const mutation = `
+        mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
+          productVariantsBulkUpdate(productId: $productId, variants: $variants) {
+            productVariants {
+              id
+              price
+            }
+            userErrors {
+              field
+              message
+            }
+          }
+        }
+      `;
+
+      let result;
+      let retries = 2;
+      while (retries >= 0) {
+        try {
+          result = await this.graphql(mutation, {
+            productId: product.id,
+            variants: [{
+              id: product.variantId,
+              price: roundedPrice.toString()
+            }]
+          });
+          break; // Success, exit retry loop
+        } catch (error) {
+          const isThrottled = error.message?.includes('Throttled') || 
+                             error.message?.includes('THROTTLED');
+          
+          if (isThrottled && retries > 0) {
+            logger?.warn(`Throttled while updating variant price for product ${product.id}, retrying...`, {
+              productId: product.id,
+              retriesLeft: retries
+            });
+            // Wait before retry (exponential backoff)
+            await new Promise(resolve => setTimeout(resolve, Math.pow(2, 2 - retries) * 1000));
+            retries--;
+          } else {
+            throw error; // Re-throw if not throttled or out of retries
+          }
+        }
+      }
+
+      if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
+        throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
+      }
+
+      return {
+        productId: product.id,
+        productTitle: product.title,
+        sku: product.sku || '',
+        oldPrice: product.currentPrice,
+        newPrice: roundedPrice,
+        success: true
+      };
+    } catch (error) {
+      return {
+        productId: product.id,
+        productTitle: product.title,
+        sku: product.sku || '',
+        success: false,
+        error: error.message
+      };
+    }
+  }
+
+  /**
+   * Bulk update all product prices based on new metal rates
+   * Optimized with parallel batch processing and caching
+   * @param {Object} newMetalRates - New metal rates
+   * @param {Object} calculator - Price calculator instance
+   * @param {Function} progressCallback - Optional callback for progress updates (processed, total, updates)
+   * @param {Object} logger - Optional logger instance
+   * @returns {Promise<Array>} Array of update results
+   */
+  async bulkUpdatePrices(newMetalRates, calculator, progressCallback = null, logger = null) {
     // Fetch all products by paginating through all pages
     let allProducts = [];
     let cursor = null;
     let hasNextPage = true;
 
+    logger?.info('Starting bulk price update - fetching all products', {});
+    
     while (hasNextPage) {
       const result = await this.getConfiguredProducts(cursor, 50);
       allProducts = allProducts.concat(result.products);
@@ -1049,161 +1330,119 @@ export class ShopifyAPI {
       cursor = result.pageInfo.endCursor;
     }
 
+    logger?.info('Fetched all products', { totalProducts: allProducts.length });
+
+    // Fetch stone pricing once (was being fetched 1000+ times before)
+    const stonePricing = await this.getAllStonePricing();
+    logger?.info('Fetched stone pricing', { stoneCount: stonePricing.length });
+
+    // Pre-fetch all discount rules and populate cache
+    const discountCache = new Map();
+    try {
+      const allDiscountRules = await this.getAllDiscountRules();
+      allDiscountRules.forEach(rule => {
+        discountCache.set(rule.id, rule);
+      });
+      logger?.info('Pre-fetched all discount rules', { discountCount: allDiscountRules.length });
+    } catch (error) {
+      logger?.warn('Error pre-fetching discount rules, will fetch on-demand', { error: error.message });
+    }
+
     const updates = [];
+    const totalProducts = allProducts.length;
+    // Optimized batch size and concurrency for better performance
+    const BATCH_SIZE = 12; // Process 12 products in parallel per batch (increased from 5)
+    const CONCURRENT_BATCHES = 2; // Process 2 batches concurrently (increased from 1)
+    
+    // Adaptive rate limiting
+    let baseDelay = 250; // Base delay between batch groups (reduced from 500ms)
+    let throttleCount = 0; // Track throttling occurrences
 
-    for (const product of allProducts) {
-      try {
-        // Skip products without configuration
-        if (!product.configuration?.configured) {
-          updates.push({
-            productId: product.id,
-            productTitle: product.title,
-            success: false,
-            error: 'Product not configured'
-          });
-          continue;
-        }
-
-        // Calculate total stone cost from stones array or fall back to old stone_cost field
-        let totalStoneCost = 0;
-        if (product.configuration.stones && Array.isArray(product.configuration.stones) && product.configuration.stones.length > 0) {
-          // Sum all stoneCost values from the stones array
-          totalStoneCost = product.configuration.stones.reduce((sum, stone) => {
-            return sum + (parseFloat(stone.stoneCost) || 0);
-          }, 0);
-        } else {
-          // Fall back to old stone_cost field for backward compatibility
-          totalStoneCost = parseFloat(product.configuration.stone_cost) || 0;
-        }
-
-        // Fetch stone pricing for accurate product type detection (if discount is applied later)
-        const stonePricing = await this.getAllStonePricing();
+    // Process products in batches
+    for (let i = 0; i < allProducts.length; i += BATCH_SIZE * CONCURRENT_BATCHES) {
+      // Create batches for concurrent processing
+      const batchPromises = [];
+      
+      for (let j = 0; j < CONCURRENT_BATCHES && (i + j * BATCH_SIZE) < allProducts.length; j++) {
+        const batchStart = i + j * BATCH_SIZE;
+        const batchEnd = Math.min(batchStart + BATCH_SIZE, allProducts.length);
+        const batch = allProducts.slice(batchStart, batchEnd);
         
-        // Build config for price calculation
-        const priceConfig = {
-          metalWeight: product.configuration.metal_weight,
-          metalType: product.configuration.metal_type,
-          makingChargePercent: product.configuration.making_charge_percent,
-          labourType: product.configuration.labour_type,
-          labourValue: product.configuration.labour_value,
-          wastageType: product.configuration.wastage_type,
-          wastageValue: product.configuration.wastage_value,
-          stoneCost: totalStoneCost,
-          taxPercent: product.configuration.tax_percent,
-          stones: product.configuration.stones || [] // Include stones array for product type detection
-        };
-        
-        // Check if product has an existing discount
-        let discountConfig = null;
-        let finalPriceBreakdown = null;
-        
-        if (product.configuration.discount && product.configuration.discount.enabled && product.configuration.discount.discount_id) {
-          try {
-            // Fetch the full discount rules from discount_id
-            const discountRules = await this.getDiscountRuleById(product.configuration.discount.discount_id);
-            if (discountRules) {
-              // Convert discount rules to discount config format based on applied_rule
-              const appliedRule = product.configuration.discount.applied_rule || 'gold';
-              if (appliedRule === 'gold' && discountRules.gold_rules) {
-                discountConfig = {
-                  enabled: true,
-                  goldRules: discountRules.gold_rules
-                };
-              } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
-                discountConfig = {
-                  enabled: true,
-                  diamondRules: discountRules.diamond_rules
-                };
-              } else if (appliedRule === 'silver' && discountRules.silver_rules) {
-                discountConfig = {
-                  enabled: true,
-                  silverRules: discountRules.silver_rules
-                };
-              }
+        // Process batch in parallel (all products at once)
+        const batchPromise = Promise.all(
+          batch.map(async (product) => {
+            try {
+              const result = await this.processProductUpdate(product, calculator, stonePricing, discountCache, logger);
+              return result;
+            } catch (error) {
+              return {
+                productId: product.id,
+                productTitle: product.title,
+                sku: product.sku || '',
+                success: false,
+                error: error.message
+              };
             }
-          } catch (error) {
-            console.error(`Error fetching discount rules for product ${product.id}:`, error);
-            // Continue without discount if fetching fails
-          }
-        }
+          })
+        );
         
-        // Calculate price with or without discount
-        finalPriceBreakdown = calculator.calculatePrice(priceConfig, discountConfig, stonePricing);
-        
-        // Use finalPriceAfterDiscount if discount was applied, otherwise use finalPrice
-        const finalPrice = finalPriceBreakdown.finalPriceAfterDiscount || finalPriceBreakdown.finalPrice;
-        
-        // Round final price up to nearest integer
-        const roundedPrice = Math.ceil(finalPrice);
+        batchPromises.push(batchPromise);
+      }
 
-        // Update price-related metafields so frontend displays correct values
-        try {
-          await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
-        } catch (metafieldError) {
-          console.warn(`Failed to update metafields for product ${product.id}:`, metafieldError.message);
-          // Continue with price update even if metafield update fails
+      // Wait for all concurrent batches to complete
+      const batchResults = await Promise.all(batchPromises);
+      
+      // Flatten results and check for throttling
+      let batchThrottled = false;
+      for (const batchResult of batchResults) {
+        updates.push(...batchResult);
+        // Check if any product in this batch was throttled
+        if (batchResult.some(r => r.error && (r.error.includes('Throttled') || r.error.includes('THROTTLED')))) {
+          batchThrottled = true;
         }
-        
-        // Update discount metafield with new discount amount if discount was applied
-        if (discountConfig && finalPriceBreakdown.discount) {
-          try {
-            const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
-            const updatedDiscountMetafield = {
-              ...product.configuration.discount,
-              discount_amount: discountAmount,
-              applied_at: new Date().toISOString()
-            };
-            await this.updateProductDiscount(product.id, updatedDiscountMetafield);
-          } catch (discountError) {
-            console.warn(`Failed to update discount metafield for product ${product.id}:`, discountError.message);
-            // Continue with price update even if discount metafield update fails
-          }
-        }
+      }
 
-        // Update variant price using productVariantsBulkUpdate
-        const mutation = `
-          mutation productVariantsBulkUpdate($productId: ID!, $variants: [ProductVariantsBulkInput!]!) {
-            productVariantsBulkUpdate(productId: $productId, variants: $variants) {
-              productVariants {
-                id
-                price
-              }
-              userErrors {
-                field
-                message
-              }
-            }
-          }
-        `;
-
-        const result = await this.graphql(mutation, {
-          productId: product.id,
-          variants: [{
-            id: product.variantId,
-            price: roundedPrice.toString()
-          }]
+      // Adaptive delay adjustment based on throttling
+      if (batchThrottled) {
+        throttleCount++;
+        baseDelay = Math.min(baseDelay * 1.5, 1000); // Increase delay, max 1 second
+        logger?.warn('Throttling detected, increasing delay', { 
+          newDelay: baseDelay, 
+          throttleCount 
         });
+      } else if (throttleCount > 0 && throttleCount % 3 === 0) {
+        // Gradually decrease delay after 3 successful batches
+        baseDelay = Math.max(baseDelay * 0.9, 200); // Decrease delay, min 200ms
+        logger?.info('Reducing delay after successful batches', { newDelay: baseDelay });
+      }
 
-        if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
-          throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
-        }
+      const processed = Math.min(i + BATCH_SIZE * CONCURRENT_BATCHES, totalProducts);
+      
+      // Call progress callback if provided
+      if (progressCallback) {
+        progressCallback(processed, totalProducts, updates);
+      }
 
-        updates.push({
-          productId: product.id,
-          productTitle: product.title,
-          oldPrice: product.currentPrice,
-          newPrice: roundedPrice,
-          success: true
-        });
-      } catch (error) {
-        updates.push({
-          productId: product.id,
-          productTitle: product.title,
-          success: false,
-          error: error.message
-        });
+      logger?.info('Batch progress', {
+        processed,
+        total: totalProducts,
+        percentage: Math.round((processed / totalProducts) * 100),
+        successCount: updates.filter(u => u.success).length,
+        failCount: updates.filter(u => !u.success).length,
+        currentDelay: baseDelay
+      });
+
+      // Adaptive delay between batch groups
+      if (i + BATCH_SIZE * CONCURRENT_BATCHES < allProducts.length) {
+        await new Promise(resolve => setTimeout(resolve, baseDelay));
       }
     }
+
+    logger?.info('Bulk price update completed', {
+      total: totalProducts,
+      success: updates.filter(u => u.success).length,
+      failed: updates.filter(u => !u.success).length
+    });
 
     return updates;
   }
@@ -1452,6 +1691,76 @@ export class ShopifyAPI {
       });
       return rule;
     });
+  }
+
+  /**
+   * Get all discount rules with pagination
+   * Used for pre-fetching all discount rules before bulk processing
+   */
+  async getAllDiscountRules() {
+    let allRules = [];
+    let cursor = null;
+    let hasNextPage = true;
+
+    while (hasNextPage) {
+      const query = `
+        query GetAllDiscountRules($after: String) {
+          metaobjects(type: "discount_rules", first: 50, after: $after) {
+            nodes {
+              id
+              handle
+              fields {
+                key
+                value
+              }
+            }
+            pageInfo {
+              hasNextPage
+              endCursor
+            }
+          }
+        }
+      `;
+
+      const result = await this.graphql(query, { after: cursor });
+      
+      if (!result.metaobjects || !result.metaobjects.nodes) {
+        break;
+      }
+
+      const rules = result.metaobjects.nodes.map(node => {
+        const rule = { id: node.id, handle: node.handle };
+        node.fields.forEach(field => {
+          // JSON fields
+          if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+            try {
+              rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+            } catch {
+              rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+            }
+          } 
+          // Boolean fields
+          else if (field.key === 'is_active') {
+            rule[field.key] = field.value === 'true';
+          } 
+          // Numeric fields
+          else if (field.key === 'discount_value') {
+            rule[field.key] = parseFloat(field.value) || 0;
+          } 
+          // String fields
+          else {
+            rule[field.key] = field.value;
+          }
+        });
+        return rule;
+      });
+
+      allRules = allRules.concat(rules);
+      hasNextPage = result.metaobjects.pageInfo.hasNextPage;
+      cursor = result.metaobjects.pageInfo.endCursor;
+    }
+
+    return allRules;
   }
 
   /**

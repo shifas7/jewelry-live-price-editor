@@ -2,6 +2,7 @@ const { useState, useEffect } = React;
 
 function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
   const [applying, setApplying] = useState(false);
+  const [applyConfirm, setApplyConfirm] = useState(false);
   const [discountConfig, setDiscountConfig] = useState({
     gold: { enabled: false, discountValue: '' },
     diamond: { enabled: false, discountValue: '' },
@@ -9,6 +10,7 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
   });
 
   const API = window.API || {};
+  const showToast = window.showToast || { success: () => {}, error: () => {}, warning: () => {} };
 
   // Detect product types
   const detectProductTypes = () => {
@@ -76,39 +78,39 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
   const validate = () => {
     if (productTypes.gold > 0 && discountConfig.gold.enabled) {
       if (!discountConfig.gold.discountValue || isNaN(discountConfig.gold.discountValue)) {
-        alert('Please enter a valid percentage for Gold products');
+        alert('Error: Please enter a valid percentage for Gold products');
         return false;
       }
       if (parseFloat(discountConfig.gold.discountValue) < 0 || parseFloat(discountConfig.gold.discountValue) > 100) {
-        alert('Gold discount percentage must be between 0 and 100');
+        alert('Error: Gold discount percentage must be between 0 and 100');
         return false;
       }
     }
 
     if (productTypes.diamond > 0 && discountConfig.diamond.enabled) {
       if (!discountConfig.diamond.discountValue || isNaN(discountConfig.diamond.discountValue)) {
-        alert('Please enter a valid amount for Diamond products');
+        alert('Error: Please enter a valid amount for Diamond products');
         return false;
       }
       if (parseFloat(discountConfig.diamond.discountValue) < 0) {
-        alert('Diamond discount amount must be positive');
+        alert('Error: Diamond discount amount must be positive');
         return false;
       }
     }
 
     if (productTypes.silver > 0 && discountConfig.silver.enabled) {
       if (discountConfig.silver.weightSlabs.length === 0) {
-        alert('Please add at least one weight slab for Silver products');
+        alert('Error: Please add at least one weight slab for Silver products');
         return false;
       }
       for (let i = 0; i < discountConfig.silver.weightSlabs.length; i++) {
         const slab = discountConfig.silver.weightSlabs[i];
         if (!slab.fromWeight || !slab.toWeight || !slab.discountAmount) {
-          alert(`Slab ${i + 1}: All fields are required`);
+          alert(`Error: Slab ${i + 1}: All fields are required`);
           return false;
         }
         if (parseFloat(slab.fromWeight) > parseFloat(slab.toWeight)) {
-          alert(`Slab ${i + 1}: From weight cannot be greater than To weight`);
+          alert(`Error: Slab ${i + 1}: From weight cannot be greater than To weight`);
           return false;
         }
       }
@@ -117,7 +119,7 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
     // Check if at least one discount is enabled
     const anyEnabled = discountConfig.gold.enabled || discountConfig.diamond.enabled || discountConfig.silver.enabled;
     if (!anyEnabled) {
-      alert('Please enable at least one discount type');
+      alert('Error: Please enable at least one discount type');
       return false;
     }
 
@@ -129,10 +131,12 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
       return;
     }
 
-    if (!confirm(`Apply discount to ${productIds.length} product(s)?`)) {
-      return;
-    }
+    setApplyConfirm(true);
+  };
 
+  const confirmApply = async () => {
+    setApplyConfirm(false);
+    
     try {
       setApplying(true);
 
@@ -202,13 +206,13 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
         const successCount = bulkResults.filter(r => r.success).length;
         alert(`Applied discount to ${successCount} out of ${results.length} product(s)`);
       } else {
-        alert('No discounts were applied. Please enable discounts for the selected product types.');
+        alert('Warning: No discounts were applied. Please enable discounts for the selected product types.');
       }
 
       onApply();
     } catch (error) {
       console.error('Error applying discount:', error);
-      alert('Error applying discount: ' + error.message);
+      alert('Error: Error applying discount: ' + error.message);
     } finally {
       setApplying(false);
     }
@@ -451,6 +455,19 @@ function ApplyDiscountModal({ productIds, products, onClose, onApply }) {
           </button>
         </div>
       </div>
+
+      {/* Apply Confirmation Modal */}
+      {applyConfirm && window.ConfirmModal && (
+        <window.ConfirmModal
+          isOpen={applyConfirm}
+          title="Apply Discount"
+          message={`Apply discount to ${productIds.length} product(s)?`}
+          onConfirm={confirmApply}
+          onCancel={() => setApplyConfirm(false)}
+          confirmText="Apply"
+          cancelText="Cancel"
+        />
+      )}
     </div>
   );
 }

@@ -39,7 +39,7 @@
         // Load all scripts in order
         async function loadAllScripts() {
             try {
-                // Load components first
+                // Load components
                 await loadBabelScript('/js/components/DashboardTab.js');
                 await loadBabelScript('/js/components/ProductsTab.js');
                 await loadBabelScript('/js/components/ProductConfigModal.js');
@@ -48,12 +48,21 @@
                 await loadBabelScript('/js/components/DiscountFormModal.js');
                 await loadBabelScript('/js/components/ProductSelector.js');
                 await loadBabelScript('/js/components/ConflictResolutionModal.js');
+                await loadBabelScript('/js/components/RefreshProgressModal.js');
+                await loadBabelScript('/js/components/ConfirmModal.js');
                 
                 // Load main app
                 await loadBabelScript('/js/app.js');
                 
                 // Initialize app
                 if (window.App && window.API) {
+                    console.log('All components loaded:', {
+                        App: !!window.App,
+                        API: !!window.API,
+                        RefreshProgressModal: !!window.RefreshProgressModal,
+                        ConfirmModal: !!window.ConfirmModal,
+                        DashboardTab: !!window.DashboardTab
+                    });
                     ReactDOM.render(React.createElement(window.App), document.getElementById('root'));
                 } else {
                     console.error('App or API not loaded. App:', !!window.App, 'API:', !!window.API);
