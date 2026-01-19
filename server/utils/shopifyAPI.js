@@ -704,7 +704,7 @@ export class ShopifyAPI {
               sku
             }
           }
-          metafields(namespace: "jewelry_config", first: 20) {
+          metafields(namespace: "jewelry_config", first: 50) {
             nodes {
               key
               value
@@ -754,7 +754,9 @@ export class ShopifyAPI {
            'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
         config[field.key] = parseFloat(value);
       } else if (field.key === 'configured') {
-        config[field.key] = value === 'true';
+        // Handle both string 'true' and boolean true values
+        config[field.key] = value === 'true' || value === true || value === '1' || 
+                           (typeof value === 'string' && value.toLowerCase() === 'true');
       } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
         // Only include old stone fields if stones array doesn't exist
         config[field.key] = value;
@@ -812,7 +814,7 @@ export class ShopifyAPI {
                   sku
                 }
               }
-              metafields(namespace: "jewelry_config", first: 20) {
+              metafields(namespace: "jewelry_config", first: 50) {
                 nodes {
                   key
                   value
@@ -845,7 +847,7 @@ export class ShopifyAPI {
                   sku
                 }
               }
-              metafields(namespace: "jewelry_config", first: 20) {
+              metafields(namespace: "jewelry_config", first: 50) {
                 nodes {
                   key
                   value
@@ -900,7 +902,10 @@ export class ShopifyAPI {
              'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
         } else if (field.key === 'configured') {
-          config[field.key] = field.value === 'true';
+          // Handle both string 'true' and boolean true values
+          const value = field.value;
+          config[field.key] = value === 'true' || value === true || value === '1' || 
+                             (typeof value === 'string' && value.toLowerCase() === 'true');
         } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
           // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;
@@ -957,7 +962,7 @@ export class ShopifyAPI {
                 sku
               }
             }
-            metafields(namespace: "jewelry_config", first: 20) {
+            metafields(namespace: "jewelry_config", first: 50) {
               nodes {
                 key
                 value
@@ -1003,7 +1008,8 @@ export class ShopifyAPI {
              'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
           config[field.key] = parseFloat(field.value);
         } else if (field.key === 'configured') {
-          config[field.key] = field.value === 'true';
+          // Handle both string 'true' and boolean true values
+          config[field.key] = field.value === 'true' || field.value === true || field.value === '1';
         } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
           // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;

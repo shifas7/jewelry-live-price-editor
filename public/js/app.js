@@ -285,7 +285,11 @@ function App() {
                 <window.ProductConfigModal
                     product={selectedProduct}
                     onClose={() => setSelectedProduct(null)}
-                    onSave={loadProducts}
+                    onSave={() => {
+                        // Reload current page to see the update
+                        const cursor = pageCursors[currentPage] || null;
+                        loadProducts(currentPage, cursor);
+                    }}
                     metalPrices={metalPrices}
                     calculatePrice={API.calculatePrice}
                     configureProduct={API.configureProduct}
