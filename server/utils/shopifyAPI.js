@@ -1,4 +1,4 @@
-import fetch from 'node-fetch';
+import fetch from "node-fetch";
 
 /**
  * Shopify API Helper
@@ -7,7 +7,7 @@ export class ShopifyAPI {
   constructor(shop, accessToken) {
     this.shop = shop;
     this.accessToken = accessToken;
-    this.apiVersion = '2024-10';
+    this.apiVersion = "2024-10";
   }
 
   /**
@@ -21,39 +21,40 @@ export class ShopifyAPI {
     const response = await fetch(
       `https://${this.shop}/admin/api/${this.apiVersion}/graphql.json`,
       {
-        method: 'POST',
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
-          'X-Shopify-Access-Token': this.accessToken,
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": this.accessToken,
         },
         body: JSON.stringify({ query, variables }),
-      }
+      },
     );
 
     const result = await response.json();
-    
+
     // Check for rate limiting errors
     if (result.errors) {
-      const throttledError = result.errors.find(err => 
-        err.extensions?.code === 'THROTTLED' || 
-        err.message?.toLowerCase().includes('throttled')
+      const throttledError = result.errors.find(
+        (err) =>
+          err.extensions?.code === "THROTTLED" ||
+          err.message?.toLowerCase().includes("throttled"),
       );
-      
+
       if (throttledError && retries > 0) {
         // Calculate backoff delay (exponential backoff: 2^retries seconds, max 30s)
         const delay = Math.min(Math.pow(2, 4 - retries) * 1000, 30000);
-        
+
         // Check for Retry-After header
-        const retryAfter = response.headers.get('Retry-After');
-        const waitTime = retryAfter ? parseInt(retryAfter) * 1000 : delay;
-        
+        const retryAfter = response.headers.get("Retry-After");
+        const waitTime = retryAfter ? Number.parseInt(retryAfter) * 1000 : delay;
+
         // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, waitTime));
-        
+        await new Promise((resolve) => setTimeout(resolve, waitTime));
+
         // Retry the request
         return this.graphql(query, variables, retries - 1);
       }
-      
+
       throw new Error(JSON.stringify(result.errors));
     }
 
@@ -79,13 +80,13 @@ export class ShopifyAPI {
     const existingId = existingResult.metaobjects?.nodes?.[0]?.id;
 
     const fields = [
-      { key: 'gold_24kt', value: prices.gold24kt.toString() },
-      { key: 'gold_22kt', value: prices.gold22kt.toString() },
-      { key: 'gold_18kt', value: prices.gold18kt.toString() },
-      { key: 'gold_14kt', value: prices.gold14kt.toString() },
-      { key: 'platinum', value: prices.platinum.toString() },
-      { key: 'silver', value: prices.silver.toString() },
-      { key: 'last_updated', value: new Date().toISOString() }
+      { key: "gold_24kt", value: prices.gold24kt.toString() },
+      { key: "gold_22kt", value: prices.gold22kt.toString() },
+      { key: "gold_18kt", value: prices.gold18kt.toString() },
+      { key: "gold_14kt", value: prices.gold14kt.toString() },
+      { key: "platinum", value: prices.platinum.toString() },
+      { key: "silver", value: prices.silver.toString() },
+      { key: "last_updated", value: new Date().toISOString() },
     ];
 
     if (existingId) {
@@ -110,7 +111,7 @@ export class ShopifyAPI {
 
       const result = await this.graphql(mutation, {
         id: existingId,
-        fields
+        fields,
       });
 
       return result.metaobjectUpdate;
@@ -136,9 +137,9 @@ export class ShopifyAPI {
 
       const result = await this.graphql(mutation, {
         metaobject: {
-          type: 'metal_prices',
-          fields
-        }
+          type: "metal_prices",
+          fields,
+        },
       });
 
       return result.metaobjectCreate;
@@ -165,15 +166,19 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-    
-    if (!result.metaobjects || !result.metaobjects.nodes || result.metaobjects.nodes.length === 0) {
+
+    if (
+      !result.metaobjects ||
+      !result.metaobjects.nodes ||
+      result.metaobjects.nodes.length === 0
+    ) {
       return null;
     }
 
     const prices = {};
-    result.metaobjects.nodes[0].fields.forEach(field => {
-      if (field.key !== 'last_updated') {
-        prices[field.key.replace(/_/g, '')] = parseFloat(field.value);
+    result.metaobjects.nodes[0].fields.forEach((field) => {
+      if (field.key !== "last_updated") {
+        prices[field.key.replace(/_/g, "")] = parseFloat(field.value);
       }
     });
 
@@ -200,20 +205,20 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'stone_id', value: stoneData.stoneId },
-      { key: 'stone_type', value: stoneData.stoneType },
-      { key: 'title', value: stoneData.title || '' },
-      { key: 'clarity', value: stoneData.clarity || '' },
-      { key: 'color', value: stoneData.color || '' },
-      { key: 'shape', value: stoneData.shape || '' },
-      { key: 'slabs', value: JSON.stringify(stoneData.slabs) }
+      { key: "stone_id", value: stoneData.stoneId },
+      { key: "stone_type", value: stoneData.stoneType },
+      { key: "title", value: stoneData.title || "" },
+      { key: "clarity", value: stoneData.clarity || "" },
+      { key: "color", value: stoneData.color || "" },
+      { key: "shape", value: stoneData.shape || "" },
+      { key: "slabs", value: JSON.stringify(stoneData.slabs) },
     ];
 
     return await this.graphql(mutation, {
       metaobject: {
-        type: 'stone_pricing',
-        fields
-      }
+        type: "stone_pricing",
+        fields,
+      },
     });
   }
 
@@ -237,20 +242,20 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'stone_id', value: stoneData.stoneId },
-      { key: 'stone_type', value: stoneData.stoneType },
-      { key: 'title', value: stoneData.title || '' },
-      { key: 'clarity', value: stoneData.clarity || '' },
-      { key: 'color', value: stoneData.color || '' },
-      { key: 'shape', value: stoneData.shape || '' },
-      { key: 'slabs', value: JSON.stringify(stoneData.slabs) }
+      { key: "stone_id", value: stoneData.stoneId },
+      { key: "stone_type", value: stoneData.stoneType },
+      { key: "title", value: stoneData.title || "" },
+      { key: "clarity", value: stoneData.clarity || "" },
+      { key: "color", value: stoneData.color || "" },
+      { key: "shape", value: stoneData.shape || "" },
+      { key: "slabs", value: JSON.stringify(stoneData.slabs) },
     ];
 
     return await this.graphql(mutation, {
       id: stoneId,
       metaobject: {
-        fields
-      }
+        fields,
+      },
     });
   }
 
@@ -274,11 +279,11 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-    
-    return result.metaobjects.nodes.map(node => {
+
+    return result.metaobjects.nodes.map((node) => {
       const stone = {};
-      node.fields.forEach(field => {
-        if (field.key === 'slabs') {
+      node.fields.forEach((field) => {
+        if (field.key === "slabs") {
           stone[field.key] = JSON.parse(field.value);
         } else {
           stone[field.key] = field.value;
@@ -300,21 +305,21 @@ export class ShopifyAPI {
       const oldStoneMetafieldIdentifiers = [
         {
           ownerId: productId,
-          namespace: 'jewelry_config',
-          key: 'stone_type'
+          namespace: "jewelry_config",
+          key: "stone_type",
         },
         {
           ownerId: productId,
-          namespace: 'jewelry_config',
-          key: 'stone_weight'
+          namespace: "jewelry_config",
+          key: "stone_weight",
         },
         {
           ownerId: productId,
-          namespace: 'jewelry_config',
-          key: 'stone_cost'
-        }
+          namespace: "jewelry_config",
+          key: "stone_cost",
+        },
       ];
-      
+
       // Delete old stone metafields
       const deleteMutation = `
         mutation DeleteMetafields($metafields: [MetafieldIdentifierInput!]!) {
@@ -330,28 +335,37 @@ export class ShopifyAPI {
           }
         }
       `;
-      
+
       try {
-        const deleteResult = await this.graphql(deleteMutation, { metafields: oldStoneMetafieldIdentifiers });
+        const deleteResult = await this.graphql(deleteMutation, {
+          metafields: oldStoneMetafieldIdentifiers,
+        });
         if (deleteResult.metafieldsDelete?.userErrors?.length > 0) {
           // Filter out errors for metafields that don't exist (which is fine)
           const realErrors = deleteResult.metafieldsDelete.userErrors.filter(
-            err => !err.message?.includes('not found') && !err.message?.includes('does not exist')
+            (err) =>
+              !err.message?.includes("not found") &&
+              !err.message?.includes("does not exist"),
           );
           if (realErrors.length > 0) {
-            console.warn('Errors deleting old stone metafields:', realErrors);
+            console.warn("Errors deleting old stone metafields:", realErrors);
           } else {
-            console.log('Deleted old stone metafields (some may not have existed)');
+            console.log(
+              "Deleted old stone metafields (some may not have existed)",
+            );
           }
         } else {
-          console.log('Deleted old stone metafields:', oldStoneMetafieldIdentifiers.length);
+          console.log(
+            "Deleted old stone metafields:",
+            oldStoneMetafieldIdentifiers.length,
+          );
         }
       } catch (error) {
-        console.warn('Could not delete old stone metafields:', error);
+        console.warn("Could not delete old stone metafields:", error);
         // Continue anyway - new stones array will be saved
       }
     }
-    
+
     const mutation = `
       mutation UpdateProductMetafields($metafields: [MetafieldsSetInput!]!) {
         metafieldsSet(metafields: $metafields) {
@@ -371,17 +385,22 @@ export class ShopifyAPI {
 
     // Helper function to normalize numeric values - ensures empty strings, null, undefined become '0'
     const normalizeNumericValue = (value) => {
-      if (value === null || value === undefined || value === '' || isNaN(value)) {
-        return '0';
+      if (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        isNaN(value)
+      ) {
+        return "0";
       }
       const num = parseFloat(value);
-      return isNaN(num) ? '0' : num.toString();
+      return isNaN(num) ? "0" : num.toString();
     };
 
     // Helper function to normalize text values - ensures null/undefined/empty become "none"
     // Shopify doesn't allow empty strings for text metafields
-    const normalizeTextValue = (value, defaultValue = 'none') => {
-      if (value === null || value === undefined || value === '') {
+    const normalizeTextValue = (value, defaultValue = "none") => {
+      if (value === null || value === undefined || value === "") {
         return defaultValue;
       }
       return String(value);
@@ -390,171 +409,180 @@ export class ShopifyAPI {
     const metafields = [
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_weight',
+        namespace: "jewelry_config",
+        key: "metal_weight",
         value: normalizeNumericValue(config.metalWeight),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_type',
-        value: normalizeTextValue(config.metalType || 'gold22kt'),
-        type: 'single_line_text_field'
+        namespace: "jewelry_config",
+        key: "metal_type",
+        value: normalizeTextValue(config.metalType || "gold22kt"),
+        type: "single_line_text_field",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'making_charge_percent',
+        namespace: "jewelry_config",
+        key: "making_charge_percent",
         value: normalizeNumericValue(config.makingChargePercent),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'labour_type',
-        value: normalizeTextValue(config.labourType || 'percentage'),
-        type: 'single_line_text_field'
+        namespace: "jewelry_config",
+        key: "labour_type",
+        value: normalizeTextValue(config.labourType || "percentage"),
+        type: "single_line_text_field",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'labour_value',
+        namespace: "jewelry_config",
+        key: "labour_value",
         value: normalizeNumericValue(config.labourValue),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'wastage_type',
-        value: normalizeTextValue(config.wastageType || 'percentage'),
-        type: 'single_line_text_field'
+        namespace: "jewelry_config",
+        key: "wastage_type",
+        value: normalizeTextValue(config.wastageType || "percentage"),
+        type: "single_line_text_field",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'wastage_value',
+        namespace: "jewelry_config",
+        key: "wastage_value",
         value: normalizeNumericValue(config.wastageValue),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'stones',
-        value: config.stones && Array.isArray(config.stones) ? JSON.stringify(config.stones) : '[]',
-        type: 'json'
+        namespace: "jewelry_config",
+        key: "stones",
+        value:
+          config.stones && Array.isArray(config.stones)
+            ? JSON.stringify(config.stones)
+            : "[]",
+        type: "json",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'net_weight',
+        namespace: "jewelry_config",
+        key: "net_weight",
         value: normalizeNumericValue(config.netWeight),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'gross_weight',
+        namespace: "jewelry_config",
+        key: "gross_weight",
         value: normalizeNumericValue(config.grossWeight),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'tax_percent',
+        namespace: "jewelry_config",
+        key: "tax_percent",
         value: normalizeNumericValue(config.taxPercent || 3),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_rate',
+        namespace: "jewelry_config",
+        key: "metal_rate",
         value: normalizeNumericValue(config.metalRate),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_cost',
+        namespace: "jewelry_config",
+        key: "metal_cost",
         value: normalizeNumericValue(config.metalCost),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'making_charge',
+        namespace: "jewelry_config",
+        key: "making_charge",
         value: normalizeNumericValue(config.makingCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'labour_charge',
+        namespace: "jewelry_config",
+        key: "labour_charge",
         value: normalizeNumericValue(config.labourCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'wastage_charge',
+        namespace: "jewelry_config",
+        key: "wastage_charge",
         value: normalizeNumericValue(config.wastageCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'tax_amount',
+        namespace: "jewelry_config",
+        key: "tax_amount",
         value: normalizeNumericValue(config.taxAmount),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'subtotal',
+        namespace: "jewelry_config",
+        key: "subtotal",
         value: normalizeNumericValue(config.subtotal),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'discounted_subtotal',
-        value: normalizeNumericValue(config.discountedSubtotal || config.subtotal),
-        type: 'number_decimal'
+        namespace: "jewelry_config",
+        key: "discounted_subtotal",
+        value: normalizeNumericValue(
+          config.discountedSubtotal || config.subtotal,
+        ),
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'price_before_discount',
-        value: normalizeNumericValue(config.priceBeforeDiscount || config.finalPrice),
-        type: 'number_decimal'
+        namespace: "jewelry_config",
+        key: "price_before_discount",
+        value: normalizeNumericValue(
+          config.priceBeforeDiscount || config.finalPrice,
+        ),
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'tax_amount_before_discount',
-        value: normalizeNumericValue(config.taxAmountBeforeDiscount || config.taxAmount),
-        type: 'number_decimal'
+        namespace: "jewelry_config",
+        key: "tax_amount_before_discount",
+        value: normalizeNumericValue(
+          config.taxAmountBeforeDiscount || config.taxAmount,
+        ),
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'product_code',
-        value: normalizeTextValue(config.productCode, ''),
-        type: 'single_line_text_field'
+        namespace: "jewelry_config",
+        key: "product_code",
+        value: normalizeTextValue(config.productCode, ""),
+        type: "single_line_text_field",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'configured',
-        value: 'true',
-        type: 'boolean'
-      }
+        namespace: "jewelry_config",
+        key: "configured",
+        value: "true",
+        type: "boolean",
+      },
     ];
 
     const result = await this.graphql(mutation, { metafields });
-    
+
     if (result.metafieldsSet?.userErrors?.length > 0) {
-      console.error('Metafield errors:', result.metafieldsSet.userErrors);
+      console.error("Metafield errors:", result.metafieldsSet.userErrors);
       throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
     }
 
@@ -566,10 +594,12 @@ export class ShopifyAPI {
    */
   getSkuFromVariants(variants) {
     if (!variants || !variants.nodes || variants.nodes.length === 0) {
-      return '';
+      return "";
     }
-    const variantWithSku = variants.nodes.find(v => v.sku && v.sku.trim() !== '');
-    return variantWithSku ? variantWithSku.sku : '';
+    const variantWithSku = variants.nodes.find(
+      (v) => v.sku && v.sku.trim() !== "",
+    );
+    return variantWithSku ? variantWithSku.sku : "";
   }
 
   /**
@@ -580,11 +610,16 @@ export class ShopifyAPI {
   async updateProductPriceMetafields(productId, priceBreakdown) {
     // Helper function to normalize numeric values
     const normalizeNumericValue = (value) => {
-      if (value === null || value === undefined || value === '' || isNaN(value)) {
-        return '0';
+      if (
+        value === null ||
+        value === undefined ||
+        value === "" ||
+        isNaN(value)
+      ) {
+        return "0";
       }
       const num = parseFloat(value);
-      return isNaN(num) ? '0' : num.toString();
+      return isNaN(num) ? "0" : num.toString();
     };
 
     const mutation = `
@@ -607,80 +642,86 @@ export class ShopifyAPI {
     const metafields = [
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_rate',
+        namespace: "jewelry_config",
+        key: "metal_rate",
         value: normalizeNumericValue(priceBreakdown.metalRate),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'metal_cost',
+        namespace: "jewelry_config",
+        key: "metal_cost",
         value: normalizeNumericValue(priceBreakdown.metalCost),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'making_charge',
+        namespace: "jewelry_config",
+        key: "making_charge",
         value: normalizeNumericValue(priceBreakdown.makingCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'labour_charge',
+        namespace: "jewelry_config",
+        key: "labour_charge",
         value: normalizeNumericValue(priceBreakdown.labourCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'wastage_charge',
+        namespace: "jewelry_config",
+        key: "wastage_charge",
         value: normalizeNumericValue(priceBreakdown.wastageCharge),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'tax_amount',
+        namespace: "jewelry_config",
+        key: "tax_amount",
         value: normalizeNumericValue(priceBreakdown.taxAmount),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'subtotal',
+        namespace: "jewelry_config",
+        key: "subtotal",
         value: normalizeNumericValue(priceBreakdown.subtotal),
-        type: 'number_decimal'
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'discounted_subtotal',
-        value: normalizeNumericValue(priceBreakdown.discountedSubtotal || priceBreakdown.subtotal),
-        type: 'number_decimal'
+        namespace: "jewelry_config",
+        key: "discounted_subtotal",
+        value: normalizeNumericValue(
+          priceBreakdown.discountedSubtotal || priceBreakdown.subtotal,
+        ),
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'price_before_discount',
-        value: normalizeNumericValue(priceBreakdown.priceBeforeDiscount || priceBreakdown.finalPrice),
-        type: 'number_decimal'
+        namespace: "jewelry_config",
+        key: "price_before_discount",
+        value: normalizeNumericValue(
+          priceBreakdown.priceBeforeDiscount || priceBreakdown.finalPrice,
+        ),
+        type: "number_decimal",
       },
       {
         ownerId: productId,
-        namespace: 'jewelry_config',
-        key: 'tax_amount_before_discount',
-        value: normalizeNumericValue(priceBreakdown.taxAmountBeforeDiscount || priceBreakdown.taxAmount),
-        type: 'number_decimal'
-      }
+        namespace: "jewelry_config",
+        key: "tax_amount_before_discount",
+        value: normalizeNumericValue(
+          priceBreakdown.taxAmountBeforeDiscount || priceBreakdown.taxAmount,
+        ),
+        type: "number_decimal",
+      },
     ];
 
     const result = await this.graphql(mutation, { metafields });
-    
+
     if (result.metafieldsSet?.userErrors?.length > 0) {
-      console.error('Metafield errors:', result.metafieldsSet.userErrors);
+      console.error("Metafield errors:", result.metafieldsSet.userErrors);
       throw new Error(JSON.stringify(result.metafieldsSet.userErrors));
     }
 
@@ -719,45 +760,67 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { id: productId });
-    
+
     const config = {};
     let hasStonesArray = false;
-    
+
     // First pass: check if stones array exists
-    result.product.metafields.nodes.forEach(field => {
-      if (field.key === 'stones') {
+    result.product.metafields.nodes.forEach((field) => {
+      if (field.key === "stones") {
         hasStonesArray = true;
       }
     });
-    
+
     // Second pass: parse fields, ignoring old stone fields if stones array exists
-    result.product.metafields.nodes.forEach(field => {
+    result.product.metafields.nodes.forEach((field) => {
       const value = field.value;
-      
+
       // Skip old stone fields if new stones array exists
-      if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+      if (
+        hasStonesArray &&
+        ["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+      ) {
         return;
       }
-      
+
       // Parse stones JSON array
-      if (field.key === 'stones') {
+      if (field.key === "stones") {
         try {
-          config[field.key] = JSON.parse(value || '[]');
+          config[field.key] = JSON.parse(value || "[]");
         } catch (e) {
           config[field.key] = [];
         }
       }
       // Convert numeric strings to numbers
-      else if (['metal_weight', 'making_charge_percent', 'labour_value', 
-           'wastage_value', 'net_weight', 
-           'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost', 
-           'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
+      else if (
+        [
+          "metal_weight",
+          "making_charge_percent",
+          "labour_value",
+          "wastage_value",
+          "net_weight",
+          "gross_weight",
+          "tax_percent",
+          "metal_rate",
+          "metal_cost",
+          "making_charge",
+          "labour_charge",
+          "wastage_charge",
+          "tax_amount",
+        ].includes(field.key)
+      ) {
         config[field.key] = parseFloat(value);
-      } else if (field.key === 'configured') {
+      } else if (field.key === "configured") {
         // Handle both string 'true' and boolean true values
-        config[field.key] = value === 'true' || value === true || value === '1' || 
-                           (typeof value === 'string' && value.toLowerCase() === 'true');
-      } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+        config[field.key] =
+          value === "true" ||
+          value === true ||
+          value === "1" ||
+          (typeof value === "string" && value.toLowerCase() === "true");
+      } else if (
+        !hasStonesArray ||
+        !["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+      ) {
         // Only include old stone fields if stones array doesn't exist
         config[field.key] = value;
       }
@@ -767,19 +830,21 @@ export class ShopifyAPI {
     config.productTitle = result.product.title;
     config.productStatus = result.product.status;
     config.variantId = result.product.variants.nodes[0]?.id;
-    config.currentPrice = result.product.variants.nodes[0]?.price || '0';
+    config.currentPrice = result.product.variants.nodes[0]?.price || "0";
     config.sku = this.getSkuFromVariants(result.product.variants);
 
     // Parse discount metafield if it exists
     if (result.product.discountMetafield?.value) {
       try {
-        const discountValue = JSON.parse(result.product.discountMetafield.value);
+        const discountValue = JSON.parse(
+          result.product.discountMetafield.value,
+        );
         // Only include discount if it's enabled
         if (discountValue.enabled) {
           config.discount = discountValue;
         }
       } catch (e) {
-        console.error('Error parsing discount metafield:', e);
+        console.error("Error parsing discount metafield:", e);
         // If parsing fails, don't include discount
       }
     }
@@ -868,45 +933,67 @@ export class ShopifyAPI {
     }
 
     const result = await this.graphql(query, variables);
-    
-    const products = result.products.nodes.map(product => {
+
+    const products = result.products.nodes.map((product) => {
       const config = {};
       let hasStonesArray = false;
-      
+
       // First pass: check if stones array exists
-      product.metafields.nodes.forEach(field => {
-        if (field.key === 'stones') {
+      product.metafields.nodes.forEach((field) => {
+        if (field.key === "stones") {
           hasStonesArray = true;
         }
       });
-      
+
       // Second pass: parse fields, ignoring old stone fields if stones array exists
-      product.metafields.nodes.forEach(field => {
+      product.metafields.nodes.forEach((field) => {
         // Skip old stone fields if new stones array exists
-        if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+        if (
+          hasStonesArray &&
+          ["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+        ) {
           return;
         }
-        
+
         // Parse stones JSON array
-        if (field.key === 'stones') {
+        if (field.key === "stones") {
           try {
-            config[field.key] = JSON.parse(field.value || '[]');
+            config[field.key] = JSON.parse(field.value || "[]");
           } catch (e) {
             config[field.key] = [];
           }
         }
         // Convert numeric strings to numbers
-        else if (['metal_weight', 'making_charge_percent', 'labour_value', 
-             'wastage_value', 'net_weight',
-             'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
-             'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
+        else if (
+          [
+            "metal_weight",
+            "making_charge_percent",
+            "labour_value",
+            "wastage_value",
+            "net_weight",
+            "gross_weight",
+            "tax_percent",
+            "metal_rate",
+            "metal_cost",
+            "making_charge",
+            "labour_charge",
+            "wastage_charge",
+            "tax_amount",
+          ].includes(field.key)
+        ) {
           config[field.key] = parseFloat(field.value);
-        } else if (field.key === 'configured') {
+        } else if (field.key === "configured") {
           // Handle both string 'true' and boolean true values
           const value = field.value;
-          config[field.key] = value === 'true' || value === true || value === '1' || 
-                             (typeof value === 'string' && value.toLowerCase() === 'true');
-        } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          config[field.key] =
+            value === "true" ||
+            value === true ||
+            value === "1" ||
+            (typeof value === "string" && value.toLowerCase() === "true");
+        } else if (
+          !hasStonesArray ||
+          !["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+        ) {
           // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;
         }
@@ -930,16 +1017,16 @@ export class ShopifyAPI {
         title: product.title,
         status: product.status,
         vendor: product.vendor,
-        currentPrice: product.variants.nodes[0]?.price || '0',
+        currentPrice: product.variants.nodes[0]?.price || "0",
         variantId: product.variants.nodes[0]?.id,
         sku: this.getSkuFromVariants(product.variants),
-        configuration: config
+        configuration: config,
       };
     });
 
     return {
       products,
-      pageInfo: result.products.pageInfo
+      pageInfo: result.products.pageInfo,
     };
   }
 
@@ -974,43 +1061,65 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(graphqlQuery, { query });
-    
-    return result.products.nodes.map(product => {
+
+    return result.products.nodes.map((product) => {
       const config = {};
       let hasStonesArray = false;
-      
+
       // First pass: check if stones array exists
-      product.metafields.nodes.forEach(field => {
-        if (field.key === 'stones') {
+      product.metafields.nodes.forEach((field) => {
+        if (field.key === "stones") {
           hasStonesArray = true;
         }
       });
-      
+
       // Second pass: parse fields, ignoring old stone fields if stones array exists
-      product.metafields.nodes.forEach(field => {
+      product.metafields.nodes.forEach((field) => {
         // Skip old stone fields if new stones array exists
-        if (hasStonesArray && ['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+        if (
+          hasStonesArray &&
+          ["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+        ) {
           return;
         }
-        
+
         // Parse stones JSON array
-        if (field.key === 'stones') {
+        if (field.key === "stones") {
           try {
-            config[field.key] = JSON.parse(field.value || '[]');
+            config[field.key] = JSON.parse(field.value || "[]");
           } catch (e) {
             config[field.key] = [];
           }
         }
         // Convert numeric strings to numbers
-        else if (['metal_weight', 'making_charge_percent', 'labour_value', 
-             'wastage_value', 'net_weight',
-             'gross_weight', 'tax_percent', 'metal_rate', 'metal_cost',
-             'making_charge', 'labour_charge', 'wastage_charge', 'tax_amount'].includes(field.key)) {
+        else if (
+          [
+            "metal_weight",
+            "making_charge_percent",
+            "labour_value",
+            "wastage_value",
+            "net_weight",
+            "gross_weight",
+            "tax_percent",
+            "metal_rate",
+            "metal_cost",
+            "making_charge",
+            "labour_charge",
+            "wastage_charge",
+            "tax_amount",
+          ].includes(field.key)
+        ) {
           config[field.key] = parseFloat(field.value);
-        } else if (field.key === 'configured') {
+        } else if (field.key === "configured") {
           // Handle both string 'true' and boolean true values
-          config[field.key] = field.value === 'true' || field.value === true || field.value === '1';
-        } else if (!hasStonesArray || !['stone_type', 'stone_weight', 'stone_cost'].includes(field.key)) {
+          config[field.key] =
+            field.value === "true" ||
+            field.value === true ||
+            field.value === "1";
+        } else if (
+          !hasStonesArray ||
+          !["stone_type", "stone_weight", "stone_cost"].includes(field.key)
+        ) {
           // Only include old stone fields if stones array doesn't exist
           config[field.key] = field.value;
         }
@@ -1021,10 +1130,10 @@ export class ShopifyAPI {
         title: product.title,
         status: product.status,
         vendor: product.vendor,
-        currentPrice: product.variants.nodes[0]?.price || '0',
+        currentPrice: product.variants.nodes[0]?.price || "0",
         variantId: product.variants.nodes[0]?.id,
         sku: this.getSkuFromVariants(product.variants),
-        configuration: config
+        configuration: config,
       };
     });
   }
@@ -1051,14 +1160,18 @@ export class ShopifyAPI {
 
     const result = await this.graphql(mutation, {
       productId: productId,
-      variants: [{
-        id: variantId,
-        price: newPrice.toString()
-      }]
+      variants: [
+        {
+          id: variantId,
+          price: newPrice.toString(),
+        },
+      ],
     });
 
     if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
-      throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
+      throw new Error(
+        JSON.stringify(result.productVariantsBulkUpdate.userErrors),
+      );
     }
 
     return result.productVariantsBulkUpdate;
@@ -1068,22 +1181,32 @@ export class ShopifyAPI {
    * Process a single product update
    * @private
    */
-  async processProductUpdate(product, calculator, stonePricing, discountCache, logger) {
+  async processProductUpdate(
+    product,
+    calculator,
+    stonePricing,
+    discountCache,
+    logger,
+  ) {
     try {
       // Skip products without configuration
       if (!product.configuration?.configured) {
         return {
           productId: product.id,
           productTitle: product.title,
-          sku: product.sku || '',
+          sku: product.sku || "",
           success: false,
-          error: 'Product not configured'
+          error: "Product not configured",
         };
       }
 
       // Calculate total stone cost from stones array or fall back to old stone_cost field
       let totalStoneCost = 0;
-      if (product.configuration.stones && Array.isArray(product.configuration.stones) && product.configuration.stones.length > 0) {
+      if (
+        product.configuration.stones &&
+        Array.isArray(product.configuration.stones) &&
+        product.configuration.stones.length > 0
+      ) {
         // Sum all stoneCost values from the stones array
         totalStoneCost = product.configuration.stones.reduce((sum, stone) => {
           return sum + (parseFloat(stone.stoneCost) || 0);
@@ -1092,7 +1215,7 @@ export class ShopifyAPI {
         // Fall back to old stone_cost field for backward compatibility
         totalStoneCost = parseFloat(product.configuration.stone_cost) || 0;
       }
-      
+
       // Build config for price calculation
       const priceConfig = {
         metalWeight: product.configuration.metal_weight,
@@ -1104,15 +1227,19 @@ export class ShopifyAPI {
         wastageValue: product.configuration.wastage_value,
         stoneCost: totalStoneCost,
         taxPercent: product.configuration.tax_percent,
-        stones: product.configuration.stones || [] // Include stones array for product type detection
+        stones: product.configuration.stones || [], // Include stones array for product type detection
       };
-      
+
       // Check if product has an existing discount
       let discountConfig = null;
-      
-      if (product.configuration.discount && product.configuration.discount.enabled && product.configuration.discount.discount_id) {
+
+      if (
+        product.configuration.discount &&
+        product.configuration.discount.enabled &&
+        product.configuration.discount.discount_id
+      ) {
         const discountId = product.configuration.discount.discount_id;
-        
+
         // Check cache first
         if (!discountCache.has(discountId)) {
           try {
@@ -1123,120 +1250,164 @@ export class ShopifyAPI {
               discountCache.set(discountId, discountRules);
             }
           } catch (error) {
-            logger?.warn(`Error fetching discount rules for product ${product.id}`, { 
-              productId: product.id, 
-              discountId, 
-              error: error.message 
-            });
+            logger?.warn(
+              `Error fetching discount rules for product ${product.id}`,
+              {
+                productId: product.id,
+                discountId,
+                error: error.message,
+              },
+            );
             // Continue without discount if fetching fails
           }
         }
-        
+
         // Get discount rules from cache
         const discountRules = discountCache.get(discountId);
         if (discountRules) {
           // Convert discount rules to discount config format based on applied_rule
-          const appliedRule = product.configuration.discount.applied_rule || 'gold';
-          if (appliedRule === 'gold' && discountRules.gold_rules) {
+          const appliedRule =
+            product.configuration.discount.applied_rule || "gold";
+          if (appliedRule === "gold" && discountRules.gold_rules) {
             discountConfig = {
               enabled: true,
-              goldRules: discountRules.gold_rules
+              goldRules: discountRules.gold_rules,
             };
-          } else if (appliedRule === 'diamond' && discountRules.diamond_rules) {
+          } else if (appliedRule === "diamond" && discountRules.diamond_rules) {
             discountConfig = {
               enabled: true,
-              diamondRules: discountRules.diamond_rules
+              diamondRules: discountRules.diamond_rules,
             };
-          } else if (appliedRule === 'silver' && discountRules.silver_rules) {
+          } else if (appliedRule === "silver" && discountRules.silver_rules) {
             discountConfig = {
               enabled: true,
-              silverRules: discountRules.silver_rules
+              silverRules: discountRules.silver_rules,
             };
           }
         }
       }
-      
+
       // Calculate price with or without discount
-      const finalPriceBreakdown = calculator.calculatePrice(priceConfig, discountConfig, stonePricing);
-      
+      const finalPriceBreakdown = calculator.calculatePrice(
+        priceConfig,
+        discountConfig,
+        stonePricing,
+      );
+
       // Use finalPriceAfterDiscount if discount was applied, otherwise use finalPrice
-      const finalPrice = finalPriceBreakdown.finalPriceAfterDiscount || finalPriceBreakdown.finalPrice;
-      
+      const finalPrice =
+        finalPriceBreakdown.finalPriceAfterDiscount ||
+        finalPriceBreakdown.finalPrice;
+
       // Round final price up to nearest integer
       const roundedPrice = Math.ceil(finalPrice);
 
       // Update price-related metafields so frontend displays correct values
       try {
-        await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
+        await this.updateProductPriceMetafields(
+          product.id,
+          finalPriceBreakdown,
+        );
       } catch (metafieldError) {
         // Check if it's a throttling error - if so, we'll retry the whole product update
-        const isThrottled = metafieldError.message?.includes('Throttled') || 
-                            metafieldError.message?.includes('THROTTLED');
-        
+        const isThrottled =
+          metafieldError.message?.includes("Throttled") ||
+          metafieldError.message?.includes("THROTTLED");
+
         if (isThrottled) {
-          logger?.warn(`Throttled while updating metafields for product ${product.id}, will retry`, {
-            productId: product.id
-          });
-          // Wait a bit and retry the metafield update (optimized from 2000ms to 1000ms)
-          await new Promise(resolve => setTimeout(resolve, 1000));
-          try {
-            await this.updateProductPriceMetafields(product.id, finalPriceBreakdown);
-          } catch (retryError) {
-            logger?.warn(`Failed to update metafields for product ${product.id} after retry`, {
+          logger?.warn(
+            `Throttled while updating metafields for product ${product.id}, will retry`,
+            {
               productId: product.id,
-              error: retryError.message
-            });
+            },
+          );
+          // Wait a bit and retry the metafield update (optimized from 2000ms to 1000ms)
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+          try {
+            await this.updateProductPriceMetafields(
+              product.id,
+              finalPriceBreakdown,
+            );
+          } catch (retryError) {
+            logger?.warn(
+              `Failed to update metafields for product ${product.id} after retry`,
+              {
+                productId: product.id,
+                error: retryError.message,
+              },
+            );
             // Continue with price update even if metafield update fails
           }
         } else {
-          logger?.warn(`Failed to update metafields for product ${product.id}`, {
-            productId: product.id,
-            error: metafieldError.message
-          });
+          logger?.warn(
+            `Failed to update metafields for product ${product.id}`,
+            {
+              productId: product.id,
+              error: metafieldError.message,
+            },
+          );
           // Continue with price update even if metafield update fails
         }
       }
-      
+
       // Update discount metafield with new discount amount if discount was applied
       if (discountConfig && finalPriceBreakdown.discount) {
         try {
-          const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
+          const discountAmount =
+            finalPriceBreakdown.discount.discountAmount || 0;
           const updatedDiscountMetafield = {
             ...product.configuration.discount,
             discount_amount: discountAmount,
-            applied_at: new Date().toISOString()
+            applied_at: new Date().toISOString(),
           };
-          await this.updateProductDiscount(product.id, updatedDiscountMetafield);
+          await this.updateProductDiscount(
+            product.id,
+            updatedDiscountMetafield,
+          );
         } catch (discountError) {
           // Check if it's a throttling error
-          const isThrottled = discountError.message?.includes('Throttled') || 
-                              discountError.message?.includes('THROTTLED');
-          
+          const isThrottled =
+            discountError.message?.includes("Throttled") ||
+            discountError.message?.includes("THROTTLED");
+
           if (isThrottled) {
-            logger?.warn(`Throttled while updating discount metafield for product ${product.id}`, {
-              productId: product.id
-            });
+            logger?.warn(
+              `Throttled while updating discount metafield for product ${product.id}`,
+              {
+                productId: product.id,
+              },
+            );
             // Wait and retry (optimized from 2000ms to 1000ms)
-            await new Promise(resolve => setTimeout(resolve, 1000));
+            await new Promise((resolve) => setTimeout(resolve, 1000));
             try {
-              const discountAmount = finalPriceBreakdown.discount.discountAmount || 0;
+              const discountAmount =
+                finalPriceBreakdown.discount.discountAmount || 0;
               const updatedDiscountMetafield = {
                 ...product.configuration.discount,
                 discount_amount: discountAmount,
-                applied_at: new Date().toISOString()
+                applied_at: new Date().toISOString(),
               };
-              await this.updateProductDiscount(product.id, updatedDiscountMetafield);
+              await this.updateProductDiscount(
+                product.id,
+                updatedDiscountMetafield,
+              );
             } catch (retryError) {
-              logger?.warn(`Failed to update discount metafield for product ${product.id} after retry`, {
-                productId: product.id,
-                error: retryError.message
-              });
+              logger?.warn(
+                `Failed to update discount metafield for product ${product.id} after retry`,
+                {
+                  productId: product.id,
+                  error: retryError.message,
+                },
+              );
             }
           } else {
-            logger?.warn(`Failed to update discount metafield for product ${product.id}`, {
-              productId: product.id,
-              error: discountError.message
-            });
+            logger?.warn(
+              `Failed to update discount metafield for product ${product.id}`,
+              {
+                productId: product.id,
+                error: discountError.message,
+              },
+            );
           }
           // Continue with price update even if discount metafield update fails
         }
@@ -1265,23 +1436,31 @@ export class ShopifyAPI {
         try {
           result = await this.graphql(mutation, {
             productId: product.id,
-            variants: [{
-              id: product.variantId,
-              price: roundedPrice.toString()
-            }]
+            variants: [
+              {
+                id: product.variantId,
+                price: roundedPrice.toString(),
+              },
+            ],
           });
           break; // Success, exit retry loop
         } catch (error) {
-          const isThrottled = error.message?.includes('Throttled') || 
-                             error.message?.includes('THROTTLED');
-          
+          const isThrottled =
+            error.message?.includes("Throttled") ||
+            error.message?.includes("THROTTLED");
+
           if (isThrottled && retries > 0) {
-            logger?.warn(`Throttled while updating variant price for product ${product.id}, retrying...`, {
-              productId: product.id,
-              retriesLeft: retries
-            });
+            logger?.warn(
+              `Throttled while updating variant price for product ${product.id}, retrying...`,
+              {
+                productId: product.id,
+                retriesLeft: retries,
+              },
+            );
             // Wait before retry (exponential backoff)
-            await new Promise(resolve => setTimeout(resolve, Math.pow(2, 2 - retries) * 1000));
+            await new Promise((resolve) =>
+              setTimeout(resolve, Math.pow(2, 2 - retries) * 1000),
+            );
             retries--;
           } else {
             throw error; // Re-throw if not throttled or out of retries
@@ -1290,24 +1469,26 @@ export class ShopifyAPI {
       }
 
       if (result.productVariantsBulkUpdate?.userErrors?.length > 0) {
-        throw new Error(JSON.stringify(result.productVariantsBulkUpdate.userErrors));
+        throw new Error(
+          JSON.stringify(result.productVariantsBulkUpdate.userErrors),
+        );
       }
 
       return {
         productId: product.id,
         productTitle: product.title,
-        sku: product.sku || '',
+        sku: product.sku || "",
         oldPrice: product.currentPrice,
         newPrice: roundedPrice,
-        success: true
+        success: true,
       };
     } catch (error) {
       return {
         productId: product.id,
         productTitle: product.title,
-        sku: product.sku || '',
+        sku: product.sku || "",
         success: false,
-        error: error.message
+        error: error.message,
       };
     }
   }
@@ -1321,14 +1502,19 @@ export class ShopifyAPI {
    * @param {Object} logger - Optional logger instance
    * @returns {Promise<Array>} Array of update results
    */
-  async bulkUpdatePrices(newMetalRates, calculator, progressCallback = null, logger = null) {
+  async bulkUpdatePrices(
+    newMetalRates,
+    calculator,
+    progressCallback = null,
+    logger = null,
+  ) {
     // Fetch all products by paginating through all pages
     let allProducts = [];
     let cursor = null;
     let hasNextPage = true;
 
-    logger?.info('Starting bulk price update - fetching all products', {});
-    
+    logger?.info("Starting bulk price update - fetching all products", {});
+
     while (hasNextPage) {
       const result = await this.getConfiguredProducts(cursor, 50);
       allProducts = allProducts.concat(result.products);
@@ -1336,22 +1522,26 @@ export class ShopifyAPI {
       cursor = result.pageInfo.endCursor;
     }
 
-    logger?.info('Fetched all products', { totalProducts: allProducts.length });
+    logger?.info("Fetched all products", { totalProducts: allProducts.length });
 
     // Fetch stone pricing once (was being fetched 1000+ times before)
     const stonePricing = await this.getAllStonePricing();
-    logger?.info('Fetched stone pricing', { stoneCount: stonePricing.length });
+    logger?.info("Fetched stone pricing", { stoneCount: stonePricing.length });
 
     // Pre-fetch all discount rules and populate cache
     const discountCache = new Map();
     try {
       const allDiscountRules = await this.getAllDiscountRules();
-      allDiscountRules.forEach(rule => {
+      allDiscountRules.forEach((rule) => {
         discountCache.set(rule.id, rule);
       });
-      logger?.info('Pre-fetched all discount rules', { discountCount: allDiscountRules.length });
+      logger?.info("Pre-fetched all discount rules", {
+        discountCount: allDiscountRules.length,
+      });
     } catch (error) {
-      logger?.warn('Error pre-fetching discount rules, will fetch on-demand', { error: error.message });
+      logger?.warn("Error pre-fetching discount rules, will fetch on-demand", {
+        error: error.message,
+      });
     }
 
     const updates = [];
@@ -1359,51 +1549,71 @@ export class ShopifyAPI {
     // Optimized batch size and concurrency for better performance
     const BATCH_SIZE = 12; // Process 12 products in parallel per batch (increased from 5)
     const CONCURRENT_BATCHES = 2; // Process 2 batches concurrently (increased from 1)
-    
+
     // Adaptive rate limiting
     let baseDelay = 250; // Base delay between batch groups (reduced from 500ms)
     let throttleCount = 0; // Track throttling occurrences
 
     // Process products in batches
-    for (let i = 0; i < allProducts.length; i += BATCH_SIZE * CONCURRENT_BATCHES) {
+    for (
+      let i = 0;
+      i < allProducts.length;
+      i += BATCH_SIZE * CONCURRENT_BATCHES
+    ) {
       // Create batches for concurrent processing
       const batchPromises = [];
-      
-      for (let j = 0; j < CONCURRENT_BATCHES && (i + j * BATCH_SIZE) < allProducts.length; j++) {
+
+      for (
+        let j = 0;
+        j < CONCURRENT_BATCHES && i + j * BATCH_SIZE < allProducts.length;
+        j++
+      ) {
         const batchStart = i + j * BATCH_SIZE;
         const batchEnd = Math.min(batchStart + BATCH_SIZE, allProducts.length);
         const batch = allProducts.slice(batchStart, batchEnd);
-        
+
         // Process batch in parallel (all products at once)
         const batchPromise = Promise.all(
           batch.map(async (product) => {
             try {
-              const result = await this.processProductUpdate(product, calculator, stonePricing, discountCache, logger);
+              const result = await this.processProductUpdate(
+                product,
+                calculator,
+                stonePricing,
+                discountCache,
+                logger,
+              );
               return result;
             } catch (error) {
               return {
                 productId: product.id,
                 productTitle: product.title,
-                sku: product.sku || '',
+                sku: product.sku || "",
                 success: false,
-                error: error.message
+                error: error.message,
               };
             }
-          })
+          }),
         );
-        
+
         batchPromises.push(batchPromise);
       }
 
       // Wait for all concurrent batches to complete
       const batchResults = await Promise.all(batchPromises);
-      
+
       // Flatten results and check for throttling
       let batchThrottled = false;
       for (const batchResult of batchResults) {
         updates.push(...batchResult);
         // Check if any product in this batch was throttled
-        if (batchResult.some(r => r.error && (r.error.includes('Throttled') || r.error.includes('THROTTLED')))) {
+        if (
+          batchResult.some(
+            (r) =>
+              r.error &&
+              (r.error.includes("Throttled") || r.error.includes("THROTTLED")),
+          )
+        ) {
           batchThrottled = true;
         }
       }
@@ -1412,42 +1622,47 @@ export class ShopifyAPI {
       if (batchThrottled) {
         throttleCount++;
         baseDelay = Math.min(baseDelay * 1.5, 1000); // Increase delay, max 1 second
-        logger?.warn('Throttling detected, increasing delay', { 
-          newDelay: baseDelay, 
-          throttleCount 
+        logger?.warn("Throttling detected, increasing delay", {
+          newDelay: baseDelay,
+          throttleCount,
         });
       } else if (throttleCount > 0 && throttleCount % 3 === 0) {
         // Gradually decrease delay after 3 successful batches
         baseDelay = Math.max(baseDelay * 0.9, 200); // Decrease delay, min 200ms
-        logger?.info('Reducing delay after successful batches', { newDelay: baseDelay });
+        logger?.info("Reducing delay after successful batches", {
+          newDelay: baseDelay,
+        });
       }
 
-      const processed = Math.min(i + BATCH_SIZE * CONCURRENT_BATCHES, totalProducts);
-      
+      const processed = Math.min(
+        i + BATCH_SIZE * CONCURRENT_BATCHES,
+        totalProducts,
+      );
+
       // Call progress callback if provided
       if (progressCallback) {
         progressCallback(processed, totalProducts, updates);
       }
 
-      logger?.info('Batch progress', {
+      logger?.info("Batch progress", {
         processed,
         total: totalProducts,
         percentage: Math.round((processed / totalProducts) * 100),
-        successCount: updates.filter(u => u.success).length,
-        failCount: updates.filter(u => !u.success).length,
-        currentDelay: baseDelay
+        successCount: updates.filter((u) => u.success).length,
+        failCount: updates.filter((u) => !u.success).length,
+        currentDelay: baseDelay,
       });
 
       // Adaptive delay between batch groups
       if (i + BATCH_SIZE * CONCURRENT_BATCHES < allProducts.length) {
-        await new Promise(resolve => setTimeout(resolve, baseDelay));
+        await new Promise((resolve) => setTimeout(resolve, baseDelay));
       }
     }
 
-    logger?.info('Bulk price update completed', {
+    logger?.info("Bulk price update completed", {
       total: totalProducts,
-      success: updates.filter(u => u.success).length,
-      failed: updates.filter(u => !u.success).length
+      success: updates.filter((u) => u.success).length,
+      failed: updates.filter((u) => !u.success).length,
     });
 
     return updates;
@@ -1473,20 +1688,26 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'rule_name', value: discountData.ruleName },
-      { key: 'product_type', value: discountData.productType }, // gold, diamond, silver
-      { key: 'discount_type', value: discountData.discountType }, // percentage, fixed, slab
-      { key: 'discount_value', value: discountData.discountValue?.toString() || '0' },
-      { key: 'weight_slabs', value: JSON.stringify(discountData.weightSlabs || []) },
-      { key: 'is_active', value: discountData.isActive?.toString() || 'true' },
-      { key: 'created_at', value: new Date().toISOString() }
+      { key: "rule_name", value: discountData.ruleName },
+      { key: "product_type", value: discountData.productType }, // gold, diamond, silver
+      { key: "discount_type", value: discountData.discountType }, // percentage, fixed, slab
+      {
+        key: "discount_value",
+        value: discountData.discountValue?.toString() || "0",
+      },
+      {
+        key: "weight_slabs",
+        value: JSON.stringify(discountData.weightSlabs || []),
+      },
+      { key: "is_active", value: discountData.isActive?.toString() || "true" },
+      { key: "created_at", value: new Date().toISOString() },
     ];
 
     return await this.graphql(mutation, {
       metaobject: {
-        type: 'discount_rules',
-        fields
-      }
+        type: "discount_rules",
+        fields,
+      },
     });
   }
 
@@ -1510,23 +1731,47 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'discount_title', value: discountData.discount_title },
-      { key: 'application_type', value: discountData.application_type },
-      { key: 'target_collection_id', value: discountData.target_collection_id || '' },
-      { key: 'target_product_ids', value: JSON.stringify(discountData.target_product_ids || []) },
-      { key: 'gold_rules', value: JSON.stringify(discountData.gold_rules || {}) },
-      { key: 'diamond_rules', value: JSON.stringify(discountData.diamond_rules || {}) },
-      { key: 'silver_rules', value: JSON.stringify(discountData.silver_rules || {}) },
-      { key: 'is_active', value: (discountData.is_active !== undefined ? discountData.is_active : true).toString() },
-      { key: 'created_at', value: discountData.created_at || new Date().toISOString() },
-      { key: 'last_applied', value: discountData.last_applied || '' }
+      { key: "discount_title", value: discountData.discount_title },
+      { key: "application_type", value: discountData.application_type },
+      {
+        key: "target_collection_id",
+        value: discountData.target_collection_id || "",
+      },
+      {
+        key: "target_product_ids",
+        value: JSON.stringify(discountData.target_product_ids || []),
+      },
+      {
+        key: "gold_rules",
+        value: JSON.stringify(discountData.gold_rules || {}),
+      },
+      {
+        key: "diamond_rules",
+        value: JSON.stringify(discountData.diamond_rules || {}),
+      },
+      {
+        key: "silver_rules",
+        value: JSON.stringify(discountData.silver_rules || {}),
+      },
+      {
+        key: "is_active",
+        value: (discountData.is_active !== undefined
+          ? discountData.is_active
+          : true
+        ).toString(),
+      },
+      {
+        key: "created_at",
+        value: discountData.created_at || new Date().toISOString(),
+      },
+      { key: "last_applied", value: discountData.last_applied || "" },
     ];
 
     return await this.graphql(mutation, {
       metaobject: {
-        type: 'discount_rules',
-        fields
-      }
+        type: "discount_rules",
+        fields,
+      },
     });
   }
 
@@ -1550,19 +1795,25 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'rule_name', value: discountData.ruleName },
-      { key: 'product_type', value: discountData.productType },
-      { key: 'discount_type', value: discountData.discountType },
-      { key: 'discount_value', value: discountData.discountValue?.toString() || '0' },
-      { key: 'weight_slabs', value: JSON.stringify(discountData.weightSlabs || []) },
-      { key: 'is_active', value: discountData.isActive?.toString() || 'true' }
+      { key: "rule_name", value: discountData.ruleName },
+      { key: "product_type", value: discountData.productType },
+      { key: "discount_type", value: discountData.discountType },
+      {
+        key: "discount_value",
+        value: discountData.discountValue?.toString() || "0",
+      },
+      {
+        key: "weight_slabs",
+        value: JSON.stringify(discountData.weightSlabs || []),
+      },
+      { key: "is_active", value: discountData.isActive?.toString() || "true" },
     ];
 
     return await this.graphql(mutation, {
       id: ruleId,
       metaobject: {
-        fields
-      }
+        fields,
+      },
     });
   }
 
@@ -1586,22 +1837,43 @@ export class ShopifyAPI {
     `;
 
     const fields = [
-      { key: 'discount_title', value: discountData.discount_title },
-      { key: 'application_type', value: discountData.application_type },
-      { key: 'target_collection_id', value: discountData.target_collection_id || '' },
-      { key: 'target_product_ids', value: JSON.stringify(discountData.target_product_ids || []) },
-      { key: 'gold_rules', value: JSON.stringify(discountData.gold_rules || {}) },
-      { key: 'diamond_rules', value: JSON.stringify(discountData.diamond_rules || {}) },
-      { key: 'silver_rules', value: JSON.stringify(discountData.silver_rules || {}) },
-      { key: 'is_active', value: (discountData.is_active !== undefined ? discountData.is_active : true).toString() },
-      { key: 'last_applied', value: discountData.last_applied || '' }
+      { key: "discount_title", value: discountData.discount_title },
+      { key: "application_type", value: discountData.application_type },
+      {
+        key: "target_collection_id",
+        value: discountData.target_collection_id || "",
+      },
+      {
+        key: "target_product_ids",
+        value: JSON.stringify(discountData.target_product_ids || []),
+      },
+      {
+        key: "gold_rules",
+        value: JSON.stringify(discountData.gold_rules || {}),
+      },
+      {
+        key: "diamond_rules",
+        value: JSON.stringify(discountData.diamond_rules || {}),
+      },
+      {
+        key: "silver_rules",
+        value: JSON.stringify(discountData.silver_rules || {}),
+      },
+      {
+        key: "is_active",
+        value: (discountData.is_active !== undefined
+          ? discountData.is_active
+          : true
+        ).toString(),
+      },
+      { key: "last_applied", value: discountData.last_applied || "" },
     ];
 
     return await this.graphql(mutation, {
       id: ruleId,
       metaobject: {
-        fields
-      }
+        fields,
+      },
     });
   }
 
@@ -1623,21 +1895,33 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { id: ruleId });
-    
+
     if (!result.metaobject) {
       return null;
     }
 
     const rule = { id: result.metaobject.id, handle: result.metaobject.handle };
-    result.metaobject.fields.forEach(field => {
-      if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+    result.metaobject.fields.forEach((field) => {
+      if (
+        [
+          "gold_rules",
+          "diamond_rules",
+          "silver_rules",
+          "target_product_ids",
+          "weight_slabs",
+        ].includes(field.key)
+      ) {
         try {
-          rule[field.key] = JSON.parse(field.value || '[]');
+          rule[field.key] = JSON.parse(field.value || "[]");
         } catch {
-          rule[field.key] = field.value ? JSON.parse(field.value) : (field.key === 'target_product_ids' ? [] : {});
+          rule[field.key] = field.value
+            ? JSON.parse(field.value)
+            : field.key === "target_product_ids"
+              ? []
+              : {};
         }
-      } else if (field.key === 'is_active') {
-        rule[field.key] = field.value === 'true';
+      } else if (field.key === "is_active") {
+        rule[field.key] = field.value === "true";
       } else {
         rule[field.key] = field.value;
       }
@@ -1666,30 +1950,40 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query);
-    
+
     if (!result.metaobjects || !result.metaobjects.nodes) {
       return [];
     }
 
-    return result.metaobjects.nodes.map(node => {
+    return result.metaobjects.nodes.map((node) => {
       const rule = { id: node.id, handle: node.handle };
-      node.fields.forEach(field => {
+      node.fields.forEach((field) => {
         // JSON fields
-        if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+        if (
+          [
+            "gold_rules",
+            "diamond_rules",
+            "silver_rules",
+            "target_product_ids",
+            "weight_slabs",
+          ].includes(field.key)
+        ) {
           try {
-            rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+            rule[field.key] = JSON.parse(
+              field.value || (field.key === "target_product_ids" ? "[]" : "{}"),
+            );
           } catch {
-            rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+            rule[field.key] = field.key === "target_product_ids" ? [] : {};
           }
-        } 
+        }
         // Boolean fields
-        else if (field.key === 'is_active') {
-          rule[field.key] = field.value === 'true';
-        } 
+        else if (field.key === "is_active") {
+          rule[field.key] = field.value === "true";
+        }
         // Numeric fields
-        else if (field.key === 'discount_value') {
+        else if (field.key === "discount_value") {
           rule[field.key] = parseFloat(field.value) || 0;
-        } 
+        }
         // String fields
         else {
           rule[field.key] = field.value;
@@ -1729,30 +2023,41 @@ export class ShopifyAPI {
       `;
 
       const result = await this.graphql(query, { after: cursor });
-      
+
       if (!result.metaobjects || !result.metaobjects.nodes) {
         break;
       }
 
-      const rules = result.metaobjects.nodes.map(node => {
+      const rules = result.metaobjects.nodes.map((node) => {
         const rule = { id: node.id, handle: node.handle };
-        node.fields.forEach(field => {
+        node.fields.forEach((field) => {
           // JSON fields
-          if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+          if (
+            [
+              "gold_rules",
+              "diamond_rules",
+              "silver_rules",
+              "target_product_ids",
+              "weight_slabs",
+            ].includes(field.key)
+          ) {
             try {
-              rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+              rule[field.key] = JSON.parse(
+                field.value ||
+                  (field.key === "target_product_ids" ? "[]" : "{}"),
+              );
             } catch {
-              rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+              rule[field.key] = field.key === "target_product_ids" ? [] : {};
             }
-          } 
+          }
           // Boolean fields
-          else if (field.key === 'is_active') {
-            rule[field.key] = field.value === 'true';
-          } 
+          else if (field.key === "is_active") {
+            rule[field.key] = field.value === "true";
+          }
           // Numeric fields
-          else if (field.key === 'discount_value') {
+          else if (field.key === "discount_value") {
             rule[field.key] = parseFloat(field.value) || 0;
-          } 
+          }
           // String fields
           else {
             rule[field.key] = field.value;
@@ -1787,35 +2092,45 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { id: discountId });
-    
+
     if (!result.metaobject) {
       return null;
     }
 
     const rule = { id: result.metaobject.id, handle: result.metaobject.handle };
-    result.metaobject.fields.forEach(field => {
+    result.metaobject.fields.forEach((field) => {
       // JSON fields
-      if (['gold_rules', 'diamond_rules', 'silver_rules', 'target_product_ids', 'weight_slabs'].includes(field.key)) {
+      if (
+        [
+          "gold_rules",
+          "diamond_rules",
+          "silver_rules",
+          "target_product_ids",
+          "weight_slabs",
+        ].includes(field.key)
+      ) {
         try {
-          rule[field.key] = JSON.parse(field.value || (field.key === 'target_product_ids' ? '[]' : '{}'));
+          rule[field.key] = JSON.parse(
+            field.value || (field.key === "target_product_ids" ? "[]" : "{}"),
+          );
         } catch {
-          rule[field.key] = field.key === 'target_product_ids' ? [] : {};
+          rule[field.key] = field.key === "target_product_ids" ? [] : {};
         }
-      } 
+      }
       // Boolean fields
-      else if (field.key === 'is_active') {
-        rule[field.key] = field.value === 'true';
-      } 
+      else if (field.key === "is_active") {
+        rule[field.key] = field.value === "true";
+      }
       // Numeric fields
-      else if (field.key === 'discount_value') {
+      else if (field.key === "discount_value") {
         rule[field.key] = parseFloat(field.value) || 0;
-      } 
+      }
       // String fields
       else {
         rule[field.key] = field.value;
       }
     });
-    
+
     return rule;
   }
 
@@ -1862,11 +2177,11 @@ export class ShopifyAPI {
     const metafields = [
       {
         ownerId: productId,
-        namespace: 'pricing',
-        key: 'discount',
-        type: 'json',
-        value: JSON.stringify(discountConfig)
-      }
+        namespace: "pricing",
+        key: "discount",
+        type: "json",
+        value: JSON.stringify(discountConfig),
+      },
     ];
 
     return await this.graphql(mutation, { metafields });
@@ -1898,26 +2213,26 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { first });
-    
+
     return {
-      collections: result.collections.edges.map(edge => ({
+      collections: result.collections.edges.map((edge) => ({
         ...edge.node,
-        productsCount: edge.node.productsCount?.count || 0
+        productsCount: edge.node.productsCount?.count || 0,
       })),
-      pageInfo: result.collections.pageInfo
+      pageInfo: result.collections.pageInfo,
     };
   }
 
   /**
    * Get products in a collection
    */
-  async getCollectionProducts(collectionId, first = 50) {
+  async getCollectionProducts(collectionId, first = 50, after = null) {
     const query = `
-      query GetCollectionProducts($id: ID!, $first: Int!) {
+      query GetCollectionProducts($id: ID!, $first: Int!, $after: String) {
         collection(id: $id) {
           id
           title
-          products(first: $first) {
+          products(first: $first, after: $after) {
             edges {
               node {
                 id
@@ -1944,16 +2259,20 @@ export class ShopifyAPI {
       }
     `;
 
-    const result = await this.graphql(query, { id: collectionId, first });
-    
+    const result = await this.graphql(query, {
+      id: collectionId,
+      first,
+      after,
+    });
+
     if (!result.collection) {
       return { products: [], pageInfo: {} };
     }
 
-    const products = result.collection.products.edges.map(edge => {
+    const products = result.collection.products.edges.map((edge) => {
       const product = edge.node;
       const variant = product.variants.edges[0]?.node;
-      
+
       return {
         id: product.id,
         title: product.title,
@@ -1961,14 +2280,36 @@ export class ShopifyAPI {
         vendor: product.vendor,
         variantId: variant?.id,
         price: variant?.price,
-        sku: variant?.sku
+        sku: variant?.sku,
       };
     });
 
     return {
       products,
-      pageInfo: result.collection.products.pageInfo
+      pageInfo: result.collection.products.pageInfo,
     };
+  }
+
+  /**
+   * Get ALL products in a collection (handles pagination automatically)
+   */
+  async getAllCollectionProducts(collectionId) {
+    let allProducts = [];
+    let hasNextPage = true;
+    let cursor = null;
+
+    while (hasNextPage) {
+      const { products, pageInfo } = await this.getCollectionProducts(
+        collectionId,
+        250,
+        cursor,
+      );
+      allProducts = allProducts.concat(products);
+      hasNextPage = pageInfo.hasNextPage;
+      cursor = pageInfo.endCursor;
+    }
+
+    return allProducts;
   }
 
   /**
@@ -1977,16 +2318,19 @@ export class ShopifyAPI {
   async bulkApplyDiscount(productIds, discountConfig, priceCalculator) {
     const results = [];
 
+    // Fetch stone pricing once for the entire bulk operation
+    const stonePricing = await this.getAllStonePricing();
+
     for (const productId of productIds) {
       try {
         // Get product configuration
         const config = await this.getProductConfiguration(productId);
-        
+
         if (!config.configured) {
           results.push({
             productId,
             success: false,
-            error: 'Product not configured'
+            error: "Product not configured",
           });
           continue;
         }
@@ -1994,29 +2338,36 @@ export class ShopifyAPI {
         // Update discount metafield
         await this.updateProductDiscount(productId, discountConfig);
 
-        // Fetch stone pricing for accurate product type detection
-        const stonePricing = await this.getAllStonePricing();
-
-        // Recalculate price with discount
-        const priceBreakdown = priceCalculator.calculatePrice(config, discountConfig, stonePricing);
-        const roundedPrice = Math.ceil(priceBreakdown.finalPriceAfterDiscount || priceBreakdown.finalPrice);
+        // Recalculate price with discount using pre-fetched stone pricing
+        const priceBreakdown = priceCalculator.calculatePrice(
+          config,
+          discountConfig,
+          stonePricing,
+        );
+        const roundedPrice = Math.ceil(
+          priceBreakdown.finalPriceAfterDiscount || priceBreakdown.finalPrice,
+        );
 
         // Update product price
         if (config.variantId) {
-          await this.updateProductPrice(productId, config.variantId, roundedPrice);
+          await this.updateProductPrice(
+            productId,
+            config.variantId,
+            roundedPrice,
+          );
         }
 
         results.push({
           productId,
           success: true,
           newPrice: roundedPrice,
-          discountAmount: priceBreakdown.discount?.discountAmount || 0
+          discountAmount: priceBreakdown.discount?.discountAmount || 0,
         });
       } catch (error) {
         results.push({
           productId,
           success: false,
-          error: error.message
+          error: error.message,
         });
       }
     }
@@ -2055,14 +2406,17 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(graphqlQuery, { query: `sku:${query}*` });
-    
+
     // Flatten products with their variants
     const products = [];
-    result.products.edges.forEach(edge => {
+    result.products.edges.forEach((edge) => {
       const product = edge.node;
-      product.variants.edges.forEach(variantEdge => {
+      product.variants.edges.forEach((variantEdge) => {
         const variant = variantEdge.node;
-        if (variant.sku && variant.sku.toLowerCase().includes(query.toLowerCase())) {
+        if (
+          variant.sku &&
+          variant.sku.toLowerCase().includes(query.toLowerCase())
+        ) {
           products.push({
             id: product.id,
             title: product.title,
@@ -2070,7 +2424,7 @@ export class ShopifyAPI {
             vendor: product.vendor,
             variantId: variant.id,
             sku: variant.sku,
-            price: variant.price
+            price: variant.price,
           });
         }
       });
@@ -2086,7 +2440,7 @@ export class ShopifyAPI {
    */
   async findProductBySku(sku) {
     const products = await this.searchProductsBySku(sku);
-    return products.find(p => p.sku === sku) || null;
+    return products.find((p) => p.sku === sku) || null;
   }
 
   /**
@@ -2116,20 +2470,20 @@ export class ShopifyAPI {
     `;
 
     const result = await this.graphql(query, { id: productId });
-    
+
     if (!result.product) {
       return null;
     }
 
     const variant = result.product.variants.edges[0]?.node;
-    
+
     return {
       id: result.product.id,
       title: result.product.title,
       status: result.product.status,
       vendor: result.product.vendor,
       sku: variant?.sku,
-      price: variant?.price
+      price: variant?.price,
     };
   }
 }
