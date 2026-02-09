@@ -151,6 +151,65 @@ export class DiscountApplicationEngine {
   }
 
   /**
+   * Categorize products into: same discount, no discount, and conflicts
+   * @param {string[]} productIds - Product IDs to categorize
+   * @param {Object} newDiscount - New discount being applied
+   * @returns {Promise<Object>} - Categorized products
+   */
+  async categorizeProducts(productIds, newDiscount) {
+    const sameDiscount = [];
+    const noDiscount = [];
+    const conflicts = [];
+
+    for (const productId of productIds) {
+      try {
+        const config = await this.shopifyAPI.getProductConfiguration(productId);
+
+        if (!config.configured) {
+          continue; // Skip unconfigured products
+        }
+
+        const existingDiscount = config.discount;
+
+        if (!existingDiscount || !existingDiscount.enabled) {
+          // No discount - apply to newly added products
+          noDiscount.push(productId);
+        } else if (existingDiscount.discount_id === newDiscount.id) {
+          // Same discount - reapply to update rules
+          sameDiscount.push(productId);
+        } else {
+          // Different discount - conflict
+          const product = await this.shopifyAPI.getProduct(productId);
+          conflicts.push({
+            productId,
+            productTitle: product?.title || "Unknown Product",
+            productSku: product?.sku || "N/A",
+            existingDiscount: {
+              discountId: existingDiscount.discount_id,
+              discountTitle:
+                existingDiscount.discount_title || "Unknown Discount",
+              discountAmount: existingDiscount.discount_amount || 0,
+              appliedRule: existingDiscount.applied_rule,
+            },
+            newDiscount: {
+              discountId: newDiscount.id,
+              discountTitle: newDiscount.discount_title,
+              productType: await this.detectProductTypeForProduct(config),
+            },
+          });
+        }
+      } catch (error) {
+        console.error(
+          `Error categorizing product ${productId}:`,
+          error,
+        );
+      }
+    }
+
+    return { sameDiscount, noDiscount, conflicts };
+  }
+
+  /**
    * Detect product type for a configured product
    * @param {Object} config - Product configuration
    * @returns {Promise<string>} - Product type
@@ -464,54 +523,72 @@ export class DiscountApplicationEngine {
       };
     }
 
-    // Detect conflicts
-    const conflicts = await this.detectConflicts(productIds, discount);
+    // Categorize products into: same discount, no discount, and conflicts
+    const productCategories = await this.categorizeProducts(
+      productIds,
+      discount,
+    );
 
-    if (conflicts.length > 0) {
-      return {
-        hasConflicts: true,
-        conflicts,
-        pendingDiscount: discount,
-        totalProducts: productIds.length,
-        conflictCount: conflicts.length,
-      };
-    }
+    // Products to apply discount to (same discount OR no discount)
+    const productsToApply = [
+      ...productCategories.sameDiscount,
+      ...productCategories.noDiscount,
+    ];
 
-    // Apply to all products in batches to avoid rate limits and timeouts
+    // Check if there are conflicts
+    const hasConflicts = productCategories.conflicts.length > 0;
+
+    // Apply to all non-conflicting products in batches
     const BATCH_SIZE = 10;
     const results = [];
 
-    // Fetch stone pricing once for the entire bulk operation
-    const stonePricing = await this.getStonePricing();
+    if (productsToApply.length > 0) {
+      // Fetch stone pricing once for the entire bulk operation
+      const stonePricing = await this.getStonePricing();
 
-    for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
-      const batch = productIds.slice(i, i + BATCH_SIZE);
-      console.log(
-        `Processing batch ${i / BATCH_SIZE + 1} (${batch.length} products)`,
-      );
+      for (let i = 0; i < productsToApply.length; i += BATCH_SIZE) {
+        const batch = productsToApply.slice(i, i + BATCH_SIZE);
+        console.log(
+          `Processing batch ${i / BATCH_SIZE + 1} (${batch.length} products)`,
+        );
 
-      const batchResults = await Promise.all(
-        batch.map((id) => this.applyToProduct(id, discount)),
-      );
+        const batchResults = await Promise.all(
+          batch.map((id) => this.applyToProduct(id, discount)),
+        );
 
-      results.push(...batchResults);
+        results.push(...batchResults);
 
-      // Small delay between batches if not the last batch
-      if (i + BATCH_SIZE < productIds.length) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
+        // Small delay between batches if not the last batch
+        if (i + BATCH_SIZE < productsToApply.length) {
+          await new Promise((resolve) => setTimeout(resolve, 500));
+        }
       }
     }
 
     const successCount = results.filter((r) => r.success).length;
     const failCount = results.filter((r) => !r.success).length;
 
-    return {
-      success: true,
-      applied: successCount,
-      failed: failCount,
-      totalProducts: productIds.length,
-      results,
-    };
+    // Return results with or without conflicts
+    if (hasConflicts) {
+      return {
+        success: true,
+        hasConflicts: true,
+        conflicts: productCategories.conflicts,
+        applied: successCount,
+        failed: failCount,
+        totalProducts: productIds.length,
+        conflictCount: productCategories.conflicts.length,
+        results,
+      };
+    } else {
+      return {
+        success: true,
+        applied: successCount,
+        failed: failCount,
+        totalProducts: productIds.length,
+        results,
+      };
+    }
   }
 
   /**
