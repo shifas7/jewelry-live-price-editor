@@ -199,10 +199,7 @@ export class DiscountApplicationEngine {
           });
         }
       } catch (error) {
-        console.error(
-          `Error categorizing product ${productId}:`,
-          error,
-        );
+        console.error(`Error categorizing product ${productId}:`, error);
       }
     }
 
@@ -641,66 +638,81 @@ export class DiscountApplicationEngine {
     }
 
     const results = [];
+    const BATCH_SIZE = 10;
 
-    for (const productId of productIds) {
-      try {
-        // Remove discount metafield
-        await this.shopifyAPI.updateProductDiscount(productId, {
-          enabled: false,
-        });
+    for (let i = 0; i < productIds.length; i += BATCH_SIZE) {
+      const batch = productIds.slice(i, i + BATCH_SIZE);
+      console.log(
+        `Removing discount from batch ${i / BATCH_SIZE + 1} (${batch.length} products)`,
+      );
 
-        // Recalculate price without discount
-        const config = await this.shopifyAPI.getProductConfiguration(productId);
-        if (config.configured && config.variantId) {
-          // Normalize config before calculating price
-          const normalizedConfig =
-            this.normalizeConfigForPriceCalculation(config);
+      const batchResults = await Promise.all(
+        batch.map(async (productId) => {
+          try {
+            // Remove discount metafield
+            await this.shopifyAPI.updateProductDiscount(productId, {
+              enabled: false,
+            });
 
-          // Fetch stone pricing for accurate product type detection (even though no discount)
-          const stonePricing = await this.getStonePricing();
-          const priceBreakdown = this.priceCalculator.calculatePrice(
-            normalizedConfig,
-            null,
-            stonePricing,
-          );
+            // Recalculate price without discount
+            const config =
+              await this.shopifyAPI.getProductConfiguration(productId);
+            if (config.configured && config.variantId) {
+              // Normalize config before calculating price
+              const normalizedConfig =
+                this.normalizeConfigForPriceCalculation(config);
 
-          // Validate price breakdown
-          if (
-            priceBreakdown &&
-            priceBreakdown.finalPrice &&
-            priceBreakdown.finalPrice > 0
-          ) {
-            // Update product price metafields (subtotal, discounted_subtotal, price_before_discount, etc.)
-            try {
-              await this.shopifyAPI.updateProductPriceMetafields(
-                productId,
-                priceBreakdown,
+              // Fetch stone pricing for accurate product type detection (even though no discount)
+              const stonePricing = await this.getStonePricing();
+              const priceBreakdown = this.priceCalculator.calculatePrice(
+                normalizedConfig,
+                null,
+                stonePricing,
               );
-            } catch (metafieldError) {
-              console.warn(
-                `Failed to update price metafields for product ${productId}:`,
-                metafieldError.message,
-              );
-              // Continue with price update even if metafield update fails
+
+              // Validate price breakdown
+              if (
+                priceBreakdown &&
+                priceBreakdown.finalPrice &&
+                priceBreakdown.finalPrice > 0
+              ) {
+                // Update product price metafields (subtotal, discounted_subtotal, etc.)
+                try {
+                  await this.shopifyAPI.updateProductPriceMetafields(
+                    productId,
+                    priceBreakdown,
+                  );
+                } catch (metafieldError) {
+                  console.warn(
+                    `Failed to update price metafields for product ${productId}:`,
+                    metafieldError.message,
+                  );
+                }
+
+                const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
+                await this.shopifyAPI.updateProductPrice(
+                  productId,
+                  config.variantId,
+                  roundedPrice,
+                );
+              }
             }
-
-            const roundedPrice = Math.ceil(priceBreakdown.finalPrice);
-            await this.shopifyAPI.updateProductPrice(
-              productId,
-              config.variantId,
-              roundedPrice,
-            );
-          } else {
+            return { productId, success: true };
+          } catch (error) {
             console.error(
-              `Invalid price breakdown when removing discount from product ${productId}:`,
-              priceBreakdown,
+              `Error removing discount from product ${productId}:`,
+              error.message,
             );
+            return { productId, success: false, error: error.message };
           }
-        }
+        }),
+      );
 
-        results.push({ productId, success: true });
-      } catch (error) {
-        results.push({ productId, success: false, error: error.message });
+      results.push(...batchResults);
+
+      // Small delay between batches to respect rate limits
+      if (i + BATCH_SIZE < productIds.length) {
+        await new Promise((resolve) => setTimeout(resolve, 500));
       }
     }
 

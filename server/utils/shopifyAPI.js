@@ -46,7 +46,9 @@ export class ShopifyAPI {
 
         // Check for Retry-After header
         const retryAfter = response.headers.get("Retry-After");
-        const waitTime = retryAfter ? Number.parseInt(retryAfter) * 1000 : delay;
+        const waitTime = retryAfter
+          ? Number.parseInt(retryAfter) * 1000
+          : delay;
 
         // Wait before retrying
         await new Promise((resolve) => setTimeout(resolve, waitTime));
@@ -573,9 +575,14 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: "jewelry_config",
-        key: "configured",
-        value: "true",
         type: "boolean",
+      },
+      {
+        ownerId: productId,
+        namespace: "pricing",
+        key: "discount",
+        value: JSON.stringify(config.discount || { enabled: false }),
+        type: "json",
       },
     ];
 
@@ -1351,15 +1358,24 @@ export class ShopifyAPI {
       }
 
       // Update discount metafield with new discount amount if discount was applied
-      if (discountConfig && finalPriceBreakdown.discount) {
+      // OR clear discount if it was previously enabled but current config says it's disabled/missing rules
+      if (
+        (discountConfig && finalPriceBreakdown.discount) ||
+        (product.configuration.discount &&
+          product.configuration.discount.enabled)
+      ) {
         try {
           const discountAmount =
-            finalPriceBreakdown.discount.discountAmount || 0;
+            finalPriceBreakdown.discount?.discountAmount || 0;
+          const isEnabled = !!(discountConfig && finalPriceBreakdown.discount);
+
           const updatedDiscountMetafield = {
-            ...product.configuration.discount,
+            ...(product.configuration.discount || {}),
+            enabled: isEnabled,
             discount_amount: discountAmount,
             applied_at: new Date().toISOString(),
           };
+
           await this.updateProductDiscount(
             product.id,
             updatedDiscountMetafield,
@@ -1381,9 +1397,14 @@ export class ShopifyAPI {
             await new Promise((resolve) => setTimeout(resolve, 1000));
             try {
               const discountAmount =
-                finalPriceBreakdown.discount.discountAmount || 0;
+                finalPriceBreakdown.discount?.discountAmount || 0;
+              const isEnabled = !!(
+                discountConfig && finalPriceBreakdown.discount
+              );
+
               const updatedDiscountMetafield = {
-                ...product.configuration.discount,
+                ...(product.configuration.discount || {}),
+                enabled: isEnabled,
                 discount_amount: discountAmount,
                 applied_at: new Date().toISOString(),
               };

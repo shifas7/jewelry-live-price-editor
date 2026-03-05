@@ -394,6 +394,9 @@ export async function deleteDiscount(req, res) {
     // Initialize application engine and remove discounts from all target products
     applicationEngine.init();
 
+    let successCount = 0;
+    let failCount = 0;
+
     try {
       // Get all product IDs that have this discount applied
       const targetProductIds =
@@ -404,8 +407,8 @@ export async function deleteDiscount(req, res) {
         const removalResults =
           await applicationEngine.removeDiscountFromProducts(targetProductIds);
 
-        const successCount = removalResults.filter((r) => r.success).length;
-        const failCount = removalResults.filter((r) => !r.success).length;
+        successCount = removalResults.filter((r) => r.success).length;
+        failCount = removalResults.filter((r) => !r.success).length;
 
         console.log(
           `Removed discount from ${successCount} products, ${failCount} failed`,
@@ -442,6 +445,11 @@ export async function deleteDiscount(req, res) {
       success: true,
       message:
         "Discount rule deleted successfully and discounts removed from all target products",
+      stats: {
+        affectedProducts: successCount + failCount,
+        successfullyRemoved: successCount,
+        failedToRemove: failCount,
+      },
     });
   } catch (error) {
     console.error("Error deleting discount:", error);
