@@ -575,6 +575,8 @@ export class ShopifyAPI {
       {
         ownerId: productId,
         namespace: "jewelry_config",
+        key: "configured",
+        value: "true",
         type: "boolean",
       },
       {

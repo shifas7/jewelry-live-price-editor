@@ -45,6 +45,8 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         weightSlabs: []
     });
     
+    const [isSaving, setIsSaving] = useState(false);
+    
     // Load discount from product configuration if it exists
     const [productDiscount, setProductDiscount] = useState(null);
     const [isLoadingDiscount, setIsLoadingDiscount] = useState(false);
@@ -208,7 +210,10 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
     };
 
     const handleSave = async () => {
+        if (isSaving) return;
+        
         try {
+            setIsSaving(true);
             // Validate required fields
             if (!config.metalWeight || config.metalWeight === '') {
                 alert('Error: Metal Weight is required');
@@ -269,6 +274,8 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
         } catch (error) {
             console.error('Error saving configuration:', error);
             alert('Error: Error saving configuration: ' + error.message);
+        } finally {
+            setIsSaving(false);
         }
     };
 
@@ -749,11 +756,20 @@ function ProductConfigModal({ product, onClose, onSave, metalPrices, calculatePr
                 </div>
 
                 <div style={{display: 'flex', justifyContent: 'flex-end', gap: '12px'}}>
-                    <button className="btn btn-secondary" onClick={onClose}>
+                    <button className="btn btn-secondary" onClick={onClose} disabled={isSaving}>
                         Cancel
                     </button>
-                    <button className="btn btn-primary" onClick={handleSave}>
-                        Done
+                    <button 
+                        className={`btn btn-primary ${isSaving ? 'is-loading' : ''}`} 
+                        onClick={handleSave}
+                        disabled={isSaving}
+                    >
+                        {isSaving ? (
+                            <>
+                                <span className="spinner"></span>
+                                Saving...
+                            </>
+                        ) : 'Done'}
                     </button>
                 </div>
             </div>
