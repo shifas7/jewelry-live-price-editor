@@ -31,7 +31,7 @@
             const response = await fetch(url);
             const code = await response.text();
             const transformed = Babel.transform(code, {
-                presets: ['react']
+                presets: [['react', { runtime: 'classic' }]]
             }).code;
             eval(transformed);
         }
