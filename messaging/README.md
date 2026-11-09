@@ -16,9 +16,9 @@ MESSAGING_AUTO_MIGRATE=true
 MESSAGING_DATABASE_PROVIDER=mongodb
 MONGODB_URI=<atlas-connection-string>
 MONGODB_DATABASE=bhima_messaging_staging
-SHOPIFY_SHOP=f0a486-rn.myshopify.com
-SHOPIFY_ADMIN_ACCESS_TOKEN=<order-read-token>
-SHOPIFY_WEBHOOK_SECRET=<secret-of-the-app-owning-the-webhooks>
+SHOP_NAME=f0a486-rn.myshopify.com
+SHOPIFY_ACCESS_TOKEN=<existing-order-read-token>
+SHOPIFY_API_SECRET=<existing-app-secret>
 TELINFY_API_KEY=<key>
 FEATURE_ORDER_SMS=true
 FEATURE_TRACKING_SMS=true
@@ -27,6 +27,8 @@ ALLOW_TEST_ORDERS=true
 MESSAGE_RECIPIENT_ALLOWLIST=<authorized-test-number>
 WORKER_POLL_MS=600000
 ```
+
+The messaging service reuses the pricing service's `SHOP_NAME`, `SHOPIFY_ACCESS_TOKEN`, and `SHOPIFY_API_SECRET` when messaging-specific values are not set. Explicit `SHOPIFY_SHOP`, `SHOPIFY_ADMIN_ACCESS_TOKEN`, and `SHOPIFY_WEBHOOK_SECRET` take precedence. The existing app secret is valid for webhook verification only when the subscriptions belong to that same Shopify app.
 
 The migration flag creates only the messaging collections and indexes at startup; turn it off after successful staging initialization. Alternatively run `npm run messaging:migrate` with the same MongoDB settings configured. Use one staging instance, and a separate production database: dry-run records are terminal and must not suppress later production notifications. The earlier PostgreSQL implementation remains available by selecting `MESSAGING_DATABASE_PROVIDER=postgres` and configuring `DATABASE_URL`.
 

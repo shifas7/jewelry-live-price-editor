@@ -20,6 +20,18 @@ test('defaults prevent sends, keep DLT IDs as strings, and reject secret-forward
   assert.throws(() => readConfig({ MESSAGING_DRY_RUN: '0' }, { requireDatabase: false }));
 });
 
+test('reuses price manager Shopify credentials while allowing explicit messaging overrides', () => {
+  const env = { SHOP_NAME: 'https://example.myshopify.com/', SHOPIFY_ACCESS_TOKEN: 'price-token', SHOPIFY_API_SECRET: 'price-secret', FEATURE_ORDER_SMS: 'true' };
+  const config = readConfig(env, { requireDatabase: false });
+  assert.equal(config.shop, 'example.myshopify.com');
+  assert.equal(config.shopifyAccessToken, 'price-token');
+  assert.equal(config.webhookSecret, 'price-secret');
+  const override = readConfig({ ...env, SHOPIFY_SHOP: 'other.myshopify.com', SHOPIFY_ADMIN_ACCESS_TOKEN: 'other-token', SHOPIFY_WEBHOOK_SECRET: 'other-secret' }, { requireDatabase: false });
+  assert.equal(override.shop, 'other.myshopify.com');
+  assert.equal(override.shopifyAccessToken, 'other-token');
+  assert.equal(override.webhookSecret, 'other-secret');
+});
+
 test('webhook verification requires the exact raw body, a valid signature and the correct secret', () => {
   const body = Buffer.from('{ "id": 123 }\n');
   const signature = createHmac('sha256', 'test-secret').update(body).digest('base64');
