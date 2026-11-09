@@ -4,6 +4,7 @@ import { loadEnvironment, readConfig } from '../src/config.js';
 import { TelinfyClient } from '../src/telinfy.js';
 import { ShopifyClient } from '../src/shopify.js';
 import { smsTemplateChecks, smsWalletCheck } from '../src/sms-readiness.js';
+import { createStorage } from '../src/storage.js';
 
 loadEnvironment();
 const environment = { ...process.env };
@@ -16,13 +17,20 @@ if (process.argv.includes('--use-pricing-shopify')) {
 }
 
 const config = readConfig(environment, { requireDatabase: false });
-const results = { checkedAt: new Date().toISOString(), messaging: { dryRun: config.dryRun, orderSms: config.orderSms, trackingSms: config.trackingSms }, checks: {} };
+const results = { checkedAt: new Date().toISOString(), messaging: { dryRun: config.dryRun, orderSms: config.orderSms, trackingSms: config.trackingSms, databaseProvider: config.databaseProvider }, checks: {} };
 async function check(name, callback) {
   try { results.checks[name] = { status: 'ok', details: await callback() }; }
   catch (error) { results.checks[name] = { status: 'failed', code: error.code || 'check_failed', httpStatus: error.httpStatus }; }
 }
 
 const client = new TelinfyClient(config);
+if (config.databaseUrl) {
+  await check('database', async () => {
+    const storage = createStorage(config);
+    try { await storage.repository.ready(); return { initialized: true }; }
+    finally { await storage.close(); }
+  });
+} else results.checks.database = { status: 'not_configured' };
 if (config.telinfyApiKey) {
   await check('smsTemplates', async () => {
     const response = await client.templates();
@@ -50,6 +58,7 @@ results.notificationWarnings = [];
 results.loginBlockers = [];
 const checks = results.checks;
 if (!config.databaseUrl) results.notificationBlockers.push('database_not_configured');
+else if (checks.database?.status !== 'ok') results.notificationBlockers.push('database_not_ready_or_unreachable');
 if (!config.webhookSecret) results.notificationBlockers.push('webhook_secret_not_configured');
 if (checks.smsTemplates?.status !== 'ok') results.notificationBlockers.push('sms_template_access_not_verified');
 else if (!checks.smsTemplates.details.required.filter(item => item.purpose !== 'otp').every(item => item.valid)) {

@@ -36,9 +36,13 @@ export function readConfig(env = process.env, { requireDatabase = true } = {}) {
   const baseUrl = (env.TELINFY_BASE_URL || DEFAULT_BASE_URL).replace(/\/$/, '');
   // Never send credentials to a redirect target or an arbitrary configured host.
   if (baseUrl !== DEFAULT_BASE_URL) throw new Error('Unsupported TELINFY_BASE_URL');
+  const databaseProvider = env.MESSAGING_DATABASE_PROVIDER || (env.MONGODB_URI ? 'mongodb' : 'postgres');
+  if (!['mongodb', 'postgres'].includes(databaseProvider)) throw new Error('Unsupported messaging database provider');
   const config = {
     port: integer(env, 'PORT', 3010, 1, 65535),
-    databaseUrl: env.DATABASE_URL || '',
+    databaseProvider,
+    databaseUrl: databaseProvider === 'mongodb' ? (env.MONGODB_URI || '') : (env.DATABASE_URL || ''),
+    mongoDatabase: env.MONGODB_DATABASE || 'bhima_messaging_staging',
     shop: env.SHOPIFY_SHOP ? normalizeShop(env.SHOPIFY_SHOP) : '',
     shopifyApiVersion: env.SHOPIFY_API_VERSION || '2026-10',
     shopifyAccessToken: env.SHOPIFY_ADMIN_ACCESS_TOKEN || '',
@@ -56,7 +60,7 @@ export function readConfig(env = process.env, { requireDatabase = true } = {}) {
     allowTestOrders: flag(env, 'ALLOW_TEST_ORDERS'),
     recipientAllowlist: (env.MESSAGE_RECIPIENT_ALLOWLIST || '').split(',').map(x => x.trim()).filter(Boolean),
     timeoutMs: integer(env, 'PROVIDER_TIMEOUT_MS', 10000, 100, 30000),
-    pollMs: integer(env, 'WORKER_POLL_MS', 2000, 100, 60000),
+    pollMs: integer(env, 'WORKER_POLL_MS', 2000, 100, 900000),
     leaseSeconds: integer(env, 'WORKER_LEASE_SECONDS', 120, 60, 3600),
     maxAttempts: integer(env, 'MAX_ATTEMPTS', 3, 1, 10),
   };
@@ -70,10 +74,11 @@ export function readConfig(env = process.env, { requireDatabase = true } = {}) {
   if (config.confirmedStaleCreditExpiry && !/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(config.confirmedStaleCreditExpiry)) {
     throw new Error('SMS_CONFIRMED_STALE_CREDIT_EXPIRY must match the exact provider timestamp');
   }
-  if (requireDatabase && !config.databaseUrl) throw new Error('DATABASE_URL is required');
-  if (config.databaseUrl && !/^postgres(?:ql)?:\/\//.test(config.databaseUrl)) {
-    throw new Error('DATABASE_URL must use PostgreSQL');
+  if (requireDatabase && !config.databaseUrl) throw new Error(`${databaseProvider === 'mongodb' ? 'MONGODB_URI' : 'DATABASE_URL'} is required`);
+  if (config.databaseUrl && !(databaseProvider === 'mongodb' ? /^mongodb(?:\+srv)?:\/\// : /^postgres(?:ql)?:\/\//).test(config.databaseUrl)) {
+    throw new Error('Messaging database URL has the wrong scheme');
   }
+  if (!/^[a-zA-Z0-9_-]{1,63}$/.test(config.mongoDatabase)) throw new Error('Invalid MONGODB_DATABASE');
   if (config.leaseSeconds <= config.timeoutMs * 4 / 1000 + 15) {
     throw new Error('WORKER_LEASE_SECONDS must exceed four provider timeouts plus 15 seconds');
   }

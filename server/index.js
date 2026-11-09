@@ -7,9 +7,11 @@ import productsRoutes from './routes/products.js';
 import utilsRoutes from './routes/utils.js';
 import discountsRoutes from './routes/discounts.js';
 import * as webhookHandlers from './webhooks/collectionSync.js';
+import { createEmbeddedMessaging } from '../messaging/src/embedded.js';
 
 // Create Express app
-const app = createApp();
+const messaging = createEmbeddedMessaging();
+const app = createApp({ beforeJson: app => app.use('/messaging', messaging.middleware) });
 const PORT = getPort();
 
 // Register routes
@@ -29,12 +31,22 @@ app.post('/webhooks/products/delete', webhookHandlers.handleProductDelete);
 app.use(errorHandler);
 
 // Start server
-app.listen(PORT, async () => {
+const server = app.listen(PORT, async () => {
   console.log(`\n🚀 Jewelry Price App Server running on port ${PORT}`);
   console.log(`📍 Health check: http://localhost:${PORT}/api/health\n`);
   
   // Initialize calculators on startup
   await initializeCalculators();
+});
+
+// Start independently: database/provider issues do not stop the price service.
+messaging.start();
+let shuttingDown = false;
+for (const name of ['SIGINT', 'SIGTERM']) process.once(name, async () => {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  server.close();
+  await messaging.stop();
 });
 
 export default app;

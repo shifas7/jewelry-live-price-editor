@@ -4,6 +4,9 @@ import { createPool, migrate, MessageRepository } from '../src/repository.js';
 import { processOne } from '../src/worker.js';
 import { IntegrationError } from '../src/errors.js';
 import { ORDER_TEMPLATE, TRACKING_TEMPLATE } from '../src/templates.js';
+import { createHmac } from 'node:crypto';
+import { createApp } from '../../server/config/app.js';
+import { createEmbeddedMessaging } from '../src/embedded.js';
 
 const url = new URL(process.env.TEST_DATABASE_URL || 'postgresql://invalid/invalid');
 if (process.env.BHIMA_TEMP_PG !== '1' || url.hostname !== '127.0.0.1' || !/^\/bhima_test_[a-f0-9]+$/.test(url.pathname)) {
@@ -35,6 +38,61 @@ async function enqueue(jobs, deliveryId = 'delivery-1') {
   return repository.enqueue({ shop: config.shop, deliveryId, topic: 'orders/create', jobs });
 }
 async function messages() { return (await pool.query('SELECT * FROM bhima_messages ORDER BY id')).rows; }
+
+test('embedded webhook keeps signed raw bytes and wakes its worker inside the price app', async () => {
+  const env = { MESSAGING_EMBEDDED_ENABLED: 'true', DATABASE_URL: url.toString(), SHOPIFY_SHOP: 'example.myshopify.com',
+    SHOPIFY_ADMIN_ACCESS_TOKEN: 'fake-token', SHOPIFY_WEBHOOK_SECRET: 'test-secret',
+    FEATURE_ORDER_SMS: 'true', MESSAGING_DRY_RUN: 'true', WORKER_POLL_MS: '600000' };
+  const embedded = createEmbeddedMessaging({ env, logger: { info() {}, warn() {}, error() {} },
+    shopifyFactory: () => ({ readiness: async () => ({ accessScopes: ['read_orders'] }), order: async () => order }),
+    telinfyFactory: () => ({ sendSms: async () => assert.fail('dry-run must not send SMS') }) });
+  const app = createApp({ beforeJson: app => app.use('/messaging', embedded.middleware) });
+  app.get('/price-test', (_req, res) => res.json({ priceService: 'ok' }));
+  const server = app.listen(0, '127.0.0.1');
+  await new Promise(resolve => server.once('listening', resolve));
+  const base = `http://127.0.0.1:${server.address().port}`;
+  embedded.start();
+  try {
+    const body = '{ "id": 123 }\n';
+    const headers = { 'Content-Type': 'application/json', 'x-shopify-shop-domain': env.SHOPIFY_SHOP,
+      'x-shopify-topic': 'orders/create', 'x-shopify-webhook-id': 'embedded-test',
+      'x-shopify-hmac-sha256': createHmac('sha256', env.SHOPIFY_WEBHOOK_SECRET).update(body).digest('base64') };
+    const response = await fetch(`${base}/messaging/webhooks/shopify`, { method: 'POST', headers, body });
+    assert.equal(response.status, 200);
+    assert.equal((await response.json()).queued, 1);
+    const invalid = await fetch(`${base}/messaging/webhooks/shopify`, { method: 'POST', headers, body: '{"id":123}' });
+    assert.equal(invalid.status, 401);
+    assert.deepEqual(await (await fetch(`${base}/price-test`)).json(), { priceService: 'ok' });
+    const deadline = Date.now() + 5000;
+    while (Date.now() < deadline) {
+      const [record] = await messages();
+      if (record?.status === 'dry_run') break;
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+    const records = await messages();
+    assert.equal(records.length, 1);
+    assert.equal(records[0].status, 'dry_run');
+  } finally {
+    await embedded.stop();
+    await new Promise(resolve => server.close(resolve));
+  }
+});
+
+test('disabled or misconfigured messaging leaves the price application available', async () => {
+  for (const env of [{}, { MESSAGING_EMBEDDED_ENABLED: 'true' }]) {
+    const embedded = createEmbeddedMessaging({ env, logger: { info() {}, warn() {}, error() {} } });
+    const app = createApp({ beforeJson: app => app.use('/messaging', embedded.middleware) });
+    app.get('/price-test', (_req, res) => res.json({ priceService: 'ok' }));
+    const server = app.listen(0, '127.0.0.1');
+    await new Promise(resolve => server.once('listening', resolve));
+    embedded.start();
+    try {
+      const base = `http://127.0.0.1:${server.address().port}`;
+      assert.equal((await fetch(`${base}/price-test`)).status, 200);
+      assert.equal((await fetch(`${base}/messaging/webhooks/shopify`, { method: 'POST' })).status, embedded.enabled ? 503 : 404);
+    } finally { await embedded.stop(); await new Promise(resolve => server.close(resolve)); }
+  }
+});
 
 test('concurrent webhook retries and different deliveries create one logical message', async () => {
   await Promise.all(Array.from({ length: 15 }, (_, index) => enqueue([job('one')], `delivery-${index % 3}`)));

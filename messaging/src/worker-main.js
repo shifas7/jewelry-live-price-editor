@@ -1,6 +1,6 @@
 import { setTimeout } from 'node:timers/promises';
 import { loadEnvironment, readConfig } from './config.js';
-import { createPool, MessageRepository } from './repository.js';
+import { createStorage } from './storage.js';
 import { ShopifyClient } from './shopify.js';
 import { TelinfyClient } from './telinfy.js';
 import { processOne } from './worker.js';
@@ -8,8 +8,8 @@ import { validateLiveSms } from './sms-readiness.js';
 
 loadEnvironment();
 const config = readConfig();
-const pool = createPool(config);
-const repository = new MessageRepository(pool);
+const storage = createStorage(config);
+const repository = storage.repository;
 const telinfy = new TelinfyClient(config);
 const shopify = new ShopifyClient(config);
 let stopping = false;
@@ -32,4 +32,4 @@ try {
       await setTimeout(config.pollMs);
     }
   }
-} finally { await pool.end(); }
+} finally { await storage.close(); }

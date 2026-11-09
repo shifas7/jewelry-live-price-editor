@@ -7,11 +7,13 @@ dotenv.config();
 /**
  * Create and configure Express app
  */
-export function createApp() {
+export function createApp({ beforeJson } = {}) {
   const app = express();
 
   // Middleware
   app.use(cors());
+  // Signed Shopify webhooks must read the original bytes before JSON parsing.
+  if (beforeJson) beforeJson(app);
   app.use(express.json());
 
   // Serve static files from public directory

@@ -37,11 +37,23 @@ assumptions:
     verification: Template access was rechecked read-only on 2026-11-09. Local rendering and repository tests passed; real tracking and Shopify webhook delivery remain pending.
     source: messaging/README.md; messaging/src/templates.js; messaging/test/core.test.js
     updated_at: "2026-11-09"
+  - id: embedded-atlas-transaction-and-local-provider
+    status: supported
+    claim: On the merchant-provided staging Atlas cluster, the embedded webhook and worker can persist a single deduplicated order job and process it against the modeled Telinfy response.
+    reason: The real MongoDB-backed application ran against isolated test collections and a local Telinfy simulation. The merchant confirmed the cluster is Free / M0; the database connection itself does not verify billing tier. This does not establish production delivery or behavior under provider failures not simulated.
+    verification: On 2026-11-09, six Atlas integration tests passed, including simultaneous deliveries, atomic claims, unknown-send recovery, signed webhooks, dry-run wakeups, simulated success and a timeout after simulated submission. The stand-in's logs recorded the expected template, wallet and send requests; no real SMS was sent. The staging indexes were initialized separately and test-only collections were removed.
+    source: messaging/test/mongo.integration.js; messaging/scripts/test-atlas.js; messaging/src/mongo-repository.js; messaging/src/embedded.js; messaging/postman/mocks/telinfy/default.js
+    updated_at: "2026-11-09"
 fingerprints:
   - id: local-messaging-fixes
     date: "2026-11-09"
     commit: "006808273ff2cb9c967b5af1aaa32bcdf57d4666"
     cli: "1.86.0"
+  - id: embedded-atlas-working-tree
+    date: "2026-11-09"
+    commit: "efba30d7e3c96d38938ce0b386b3e28c0cb93b7f"
+    cli: "1.86.0"
+# The embedded Atlas work was tested in a modified working tree on the commit above.
 # The commit above is the parent repository HEAD; messaging is an untracked,
 # modified working tree. CLI was signed out, so owner-mock search was skipped.
 # Stand-in generated locally from the narrowed, sanitized contract and extended

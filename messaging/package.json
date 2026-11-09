@@ -12,11 +12,13 @@
     "db:migrate": "node scripts/migrate.js",
     "check:readiness": "node scripts/readiness.js",
     "test": "node --test test/*.test.js",
-    "test:integration": "node scripts/test-postgres.js"
+    "test:integration": "node scripts/test-postgres.js",
+    "test:atlas": "node scripts/test-atlas.js"
   },
   "dependencies": {
     "dotenv": "^16.6.1",
     "express": "^5.1.0",
+    "mongodb": "^6.22.0",
     "pg": "^8.16.3"
   }
 }
