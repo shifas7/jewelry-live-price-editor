@@ -1,0 +1,24 @@
+{
+  "status": "success",
+  "templates": [
+    {
+      "template_id": "1777179214792762931",
+      "template_name": "Order confirmation",
+      "template_content": "Dear {#var#}, your order {#var#} has been received successfully. Thank you for choosing Bhima Jewellery.\r\n\r\nFor any assistance or support, please feel free to contact us at 854 777 1 777",
+      "status": 1,
+      "headers": [
+        "BIMJWL"
+      ]
+    },
+    {
+      "template_id": "1777179214853851012",
+      "template_name": "Shipment details",
+      "template_content": "Dear  Customer, your order{#var#} has been shipped! Carrier: {#var#} | Tracking #: {#var#}\r\n\r\nThank you for choosing Bhima Jewellery.\r\n\r\nFor any assistance or support, please feel free to contact us at 854 777 1 777",
+      "status": 1,
+      "headers": [
+        "BIMJWL"
+      ]
+    }
+  ],
+  "count": 2
+}

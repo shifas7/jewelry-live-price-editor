@@ -1,0 +1,100 @@
+{
+  "info": {
+    "name": "Telinfy notification boundary",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "SMS routes from the public Telinfy collection, with sanitized response examples observed on 2026-11-06. Local regression contract, not a vendor-authored full specification."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "https://hub.telinfy.com/unified/developer"
+    }
+  ],
+  "item": [
+    {
+      "name": "Templates",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/sms/templates",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "{{api_key}}"
+          }
+        ]
+      },
+      "response": [
+        {
+          "name": "Observed response (sanitized)",
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"status\":\"success\",\"templates\":[{\"template_id\":\"1777179214792762931\",\"template_name\":\"Order confirmation\",\"template_content\":\"Dear {#var#}, your order {#var#} has been received successfully. Thank you for choosing Bhima Jewellery.\\r\\n\\r\\nFor any assistance or support, please feel free to contact us at 854 777 1 777\",\"status\":1,\"headers\":[\"BIMJWL\"]},{\"template_id\":\"1777179214853851012\",\"template_name\":\"Shipment details\",\"template_content\":\"Dear  Customer, your order{#var#} has been shipped! Carrier: {#var#} | Tracking #: {#var#}\\r\\n\\r\\nThank you for choosing Bhima Jewellery.\\r\\n\\r\\nFor any assistance or support, please feel free to contact us at 854 777 1 777\",\"status\":1,\"headers\":[\"BIMJWL\"]}],\"count\":2}"
+        }
+      ]
+    },
+    {
+      "name": "Wallet",
+      "request": {
+        "method": "GET",
+        "url": "{{base_url}}/api/v1/sms/wallet",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "{{api_key}}"
+          }
+        ]
+      },
+      "response": [
+        {
+          "name": "Observed response (sanitized)",
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"success\":true,\"wallet\":8.08,\"credit_expiry\":\"2026-10-08 17:57:18\"}"
+        }
+      ]
+    },
+    {
+      "name": "Send SMS",
+      "request": {
+        "method": "POST",
+        "url": "{{base_url}}/api/v1/sms/send",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "{{api_key}}"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\"Sender_Name\":\"BIMJWL\",\"SMS_Message\":\"{{sms_message}}\",\"mobile_Number\":\"9876543210\",\"template_id\":\"1777179214792762931\"}"
+        }
+      },
+      "response": [
+        {
+          "name": "Observed response (sanitized)",
+          "status": "OK",
+          "code": 200,
+          "header": [
+            {
+              "key": "Content-Type",
+              "value": "application/json"
+            }
+          ],
+          "body": "{\"responses\":[{\"status\":\"Success\",\"message\":\"SMS send successfully\",\"mobile_Number\":\"9876543210\",\"timestamp\":\"2026-11-06T06:14:15.831Z\"}]}"
+        }
+      ]
+    }
+  ]
+}

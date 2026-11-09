@@ -1,0 +1,7 @@
+simulation: telinfy-notifications
+routing: path
+mocks:
+  - name: telinfy-notifications
+    routeKey: telinfy
+    origin: hub.telinfy.com
+    path: postman/mocks/telinfy

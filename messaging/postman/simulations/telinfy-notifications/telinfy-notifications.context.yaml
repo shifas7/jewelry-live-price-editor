@@ -1,0 +1,48 @@
+purpose:
+  stands_in_for: Telinfy SMS template, wallet and single-recipient send APIs.
+  unblocks: Local notification-worker regression checks without billable SMS or production changes.
+assumptions:
+  - id: single-recipient-response-array
+    status: supported
+    claim: The observed SMS send response can contain a responses array with one Success result and the submitted mobile_Number.
+    reason: A real manual send returned that shape on 2026-11-06. The caller now recognizes it as acceptance, not proof of delivery.
+    verification: On 2026-11-09, the real worker and HTTP client passed the success simulation; the simulation log showed templates, wallet and one send request. Unit cases reject malformed arrays and multiple or mismatched recipients. Real handset receipt was separately confirmed by the user on 2026-11-06, report 7282110.
+    source: messaging/README.md; messaging/postman/contracts/telinfy-notifications.postman_collection.json; messaging/test/telinfy.simulation.js; messaging/src/telinfy.js
+    updated_at: "2026-11-09"
+  - id: returned-credit-expiry-is-an-enforced-cutoff
+    status: contradicted
+    claim: The returned credit_expiry always means Telinfy will reject messages after that date.
+    reason: A real order SMS was accepted and received on 2026-11-06 while the wallet returned an October expiry. This does not establish general validity or refund policy.
+    verification: Read-only checks on 2026-11-09 still returned the same expiry and funded balance. The local configuration records an explicit exact-value exception from the confirmed delivery. Unit and HTTP simulation checks showed that another expired date, empty wallet or invalid date still blocks sending, while the recorded value emits a warning.
+    source: messaging/README.md; messaging/src/sms-readiness.js; messaging/test/telinfy.test.js; messaging/test/telinfy.simulation.js
+    updated_at: "2026-11-09"
+  - id: catalog-and-delivery-text-are-byte-identical
+    status: contradicted
+    claim: The template catalog and a confirmed delivered message always have identical whitespace and placeholder labels.
+    reason: The order catalog used generic var slots and CRLF paragraph breaks, but the support-provided single-line text was received using the matching string template ID. Only these known variants are accepted; this is not evidence that arbitrary normalization is safe.
+    verification: A read-only template check on 2026-11-09 passed for the corrected order ID and sender. Local unit tests rejected altered punctuation, extra spaces, incorrect sender, unapproved status and the old ID. The HTTP simulation validated the outgoing body against the successful support example.
+    source: messaging/test/fixtures/telinfy-catalog.json; messaging/src/templates.js; messaging/src/sms-readiness.js; messaging/postman/mocks/telinfy/default.js
+    updated_at: "2026-11-09"
+  - id: unknown-sends-can-be-safely-retried
+    status: unknown
+    claim: Retrying a send after a timeout or gateway error cannot produce a duplicate real SMS.
+    reason: No provider idempotency guarantee has been established. Simulated acceptance before a delayed reply demonstrates why caller uncertainty must be retained.
+    verification: On 2026-11-09, the timeout-after-submit, gateway-error, wrong-recipient and unknown-response scenarios produced uncertain completion. The stand-in recorded one submission each. PostgreSQL integration tests separately verified that uncertain and expired processing records are not automatically claimed again. No real failure injections were made.
+    source: messaging/test/telinfy.simulation.js; messaging/test/repository.integration.js; messaging/src/worker.js
+    updated_at: "2026-11-09"
+  - id: tracking-sms-handset-delivery
+    status: unknown
+    claim: The tracking template delivers successfully for the intended couriers and tracking numbers.
+    reason: The catalog and sender matched, but no real tracking SMS delivery test was performed. The renderer still intentionally requires numeric tracking IDs.
+    verification: Template access was rechecked read-only on 2026-11-09. Local rendering and repository tests passed; real tracking and Shopify webhook delivery remain pending.
+    source: messaging/README.md; messaging/src/templates.js; messaging/test/core.test.js
+    updated_at: "2026-11-09"
+fingerprints:
+  - id: local-messaging-fixes
+    date: "2026-11-09"
+    commit: "006808273ff2cb9c967b5af1aaa32bcdf57d4666"
+    cli: "1.86.0"
+# The commit above is the parent repository HEAD; messaging is an untracked,
+# modified working tree. CLI was signed out, so owner-mock search was skipped.
+# Stand-in generated locally from the narrowed, sanitized contract and extended
+# with test controls. No cloud publication, deployment or real SMS in this run.

@@ -1,0 +1,15 @@
+version: 1
+id: 12cba626-83f2-4f8b-ba9c-10a1f8fde4b5
+name: telinfy-notifications
+slug: telinfy-notifications
+protocol: http
+interceptRequests: true
+port: 4500
+scenarios:
+  - name: default
+    path: ./default.js
+    default: true
+generatedFrom:
+  type: collection
+  mode: static
+  path: ../../contracts/telinfy-notifications.postman_collection.json

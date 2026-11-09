@@ -1,0 +1,22 @@
+{
+  "name": "bhima-messaging-service",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "worker": "node src/worker-main.js",
+    "db:migrate": "node scripts/migrate.js",
+    "check:readiness": "node scripts/readiness.js",
+    "test": "node --test test/*.test.js",
+    "test:integration": "node scripts/test-postgres.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.6.1",
+    "express": "^5.1.0",
+    "pg": "^8.16.3"
+  }
+}
