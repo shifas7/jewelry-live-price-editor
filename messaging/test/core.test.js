@@ -7,6 +7,15 @@ import { notificationJobs } from '../src/notifications.js';
 import { indianMobile, orderRecipient } from '../src/phone.js';
 import { orderMessage, trackingMessage } from '../src/templates.js';
 import { creditExpiryTime } from '../src/sms-readiness.js';
+import { safeError } from '../src/diagnostics.js';
+
+test('diagnostics report safe error categories without exposing messages or arbitrary names', () => {
+  const error = new Error('password and uri');
+  error.name = 'MongoServerError'; error.code = 18;
+  assert.deepEqual(safeError(error), { errorType: 'MongoServerError', errorCode: 18 });
+  error.name = 'secret-name'; error.code = 'secret-code';
+  assert.deepEqual(safeError(error), { errorType: 'other' });
+});
 
 test('defaults prevent sends, keep DLT IDs as strings, and reject secret-forwarding destinations', () => {
   const config = readConfig({}, { requireDatabase: false });

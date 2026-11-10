@@ -1,6 +1,7 @@
 import express from 'express';
 import { verifyWebhook } from './webhook-auth.js';
 import { notificationJobs } from './notifications.js';
+import { safeError } from './diagnostics.js';
 
 export function createMessagingApp({ config, repository, logger = console }) {
   const app = express();
@@ -8,7 +9,10 @@ export function createMessagingApp({ config, repository, logger = console }) {
   app.get('/healthz', (_req, res) => res.json({ status: 'ok' }));
   app.get('/readyz', async (_req, res) => {
     try { await repository.ready(); res.json({ status: 'ready' }); }
-    catch { res.status(503).json({ status: 'unavailable' }); }
+    catch (error) {
+      logger.error(JSON.stringify({ event: 'messaging_database_unavailable', ...safeError(error) }));
+      res.status(503).json({ status: 'unavailable' });
+    }
   });
 
   // HMAC requires the original bytes; do not insert express.json() ahead of this route.
