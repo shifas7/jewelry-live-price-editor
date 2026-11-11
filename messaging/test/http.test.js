@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { createMessagingApp } from '../src/app.js';
 
-async function withApp(callback, overrides = {}) {
+async function withApp(callback, overrides = {}, logger = { error() {} }) {
   const received = [];
   const repository = {
     ready: async () => {},
@@ -11,7 +11,7 @@ async function withApp(callback, overrides = {}) {
     ...overrides,
   };
   const config = { shop: 'example.myshopify.com', webhookSecret: 'test-secret', orderSms: true, trackingSms: true };
-  const app = createMessagingApp({ config, repository, logger: { error() {} } });
+  const app = createMessagingApp({ config, repository, logger });
   const server = app.listen(0, '127.0.0.1');
   await new Promise(resolve => server.once('listening', resolve));
   try { await callback(`http://127.0.0.1:${server.address().port}`, received); }
@@ -38,6 +38,22 @@ test('webhooks verify raw bytes before persistence and store only necessary iden
     const wrongShop = await fetch(`${url}/webhooks/shopify`, { method: 'POST', body, headers: headers(body, { 'x-shopify-shop-domain': 'other.myshopify.com' }) });
     assert.equal(wrongShop.status, 403);
   });
+});
+
+test('webhook diagnostics show outcomes without recording customer details or untrusted headers', async () => {
+  const logs = [];
+  await withApp(async url => {
+    const body = '{"id":123,"phone":"9876543210","email":"private@example.invalid"}';
+    const bad = await fetch(`${url}/webhooks/shopify`, { method:'POST', body, headers:headers(body, { 'x-shopify-hmac-sha256':'wrong', 'x-shopify-topic':'private-header' }) });
+    assert.equal(bad.status, 401);
+    const good = await fetch(`${url}/webhooks/shopify`, { method:'POST', body, headers:headers(body) });
+    assert.equal(good.status, 200);
+    assert.deepEqual(logs.map(x => x.event), ['webhook_rejected', 'webhook_received']);
+    assert.equal(logs[0].topic, 'other');
+    assert.equal(logs[0].reason, 'invalid_signature');
+    assert.equal(logs[1].queued, 1);
+    assert.doesNotMatch(JSON.stringify(logs), /9876543210|private@example|private-header|test-secret/);
+  }, {}, { error: x => logs.push(JSON.parse(x)), info: x => logs.push(JSON.parse(x)) });
 });
 
 test('database failure returns 503 so Shopify can retry rather than lose an event', async () => {
