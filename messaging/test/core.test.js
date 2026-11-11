@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { readConfig } from '../src/config.js';
-import { verifyWebhook } from '../src/webhook-auth.js';
+import { verifyWebhook, webhookSignatureStatus } from '../src/webhook-auth.js';
 import { notificationJobs } from '../src/notifications.js';
 import { indianMobile, orderRecipient } from '../src/phone.js';
 import { orderMessage, trackingMessage } from '../src/templates.js';
@@ -49,6 +49,10 @@ test('webhook verification requires the exact raw body, a valid signature and th
   assert.equal(verifyWebhook(body, signature, 'wrong'), false);
   assert.equal(verifyWebhook(body, 'abc', 'test-secret'), false);
   assert.equal(verifyWebhook(body, signature, ''), false);
+  assert.equal(webhookSignatureStatus(body, signature, 'wrong'), 'signature_mismatch');
+  assert.equal(webhookSignatureStatus(body, undefined, 'test-secret'), 'signature_header_missing');
+  assert.equal(webhookSignatureStatus(body, 'abc', 'test-secret'), 'signature_format_invalid');
+  assert.equal(webhookSignatureStatus({}, signature, 'test-secret'), 'raw_body_missing');
 });
 
 test('India phone normalization preserves a single recipient and rejects lists and international destinations', () => {

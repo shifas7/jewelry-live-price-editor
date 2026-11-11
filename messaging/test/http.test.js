@@ -48,10 +48,11 @@ test('webhook diagnostics show outcomes without recording customer details or un
     assert.equal(bad.status, 401);
     const good = await fetch(`${url}/webhooks/shopify`, { method:'POST', body, headers:headers(body) });
     assert.equal(good.status, 200);
-    assert.deepEqual(logs.map(x => x.event), ['webhook_rejected', 'webhook_received']);
+    assert.deepEqual(logs.map(x => x.event), ['webhook_signature_diagnostic', 'webhook_rejected', 'webhook_received']);
     assert.equal(logs[0].topic, 'other');
-    assert.equal(logs[0].reason, 'invalid_signature');
-    assert.equal(logs[1].queued, 1);
+    assert.equal(logs[0].category, 'signature_format_invalid');
+    assert.equal(logs[1].reason, 'invalid_signature');
+    assert.equal(logs[2].queued, 1);
     assert.doesNotMatch(JSON.stringify(logs), /9876543210|private@example|private-header|test-secret/);
   }, {}, { error: x => logs.push(JSON.parse(x)), info: x => logs.push(JSON.parse(x)) });
 });

@@ -1,5 +1,5 @@
 import express from 'express';
-import { verifyWebhook } from './webhook-auth.js';
+import { webhookSignatureStatus } from './webhook-auth.js';
 import { notificationJobs } from './notifications.js';
 import { safeError } from './diagnostics.js';
 
@@ -24,7 +24,9 @@ export function createMessagingApp({ config, repository, logger = console }) {
       logger.error(JSON.stringify({ event: 'webhook_rejected', topic, reason }));
       return res.status(status).json({ error: reason });
     };
-    if (!verifyWebhook(req.body, req.get('x-shopify-hmac-sha256'), config.webhookSecret)) {
+    const signatureStatus = webhookSignatureStatus(req.body, req.get('x-shopify-hmac-sha256'), config.webhookSecret);
+    if (signatureStatus !== 'valid') {
+      logger.error(JSON.stringify({ event: 'webhook_signature_diagnostic', topic, category: signatureStatus }));
       return reject(401, 'invalid_signature');
     }
     const shop = req.get('x-shopify-shop-domain');
